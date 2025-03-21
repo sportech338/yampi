@@ -9,7 +9,7 @@ ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 
-# URL da API (sem /export!)
+# URL da API
 URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 
 headers = {
@@ -41,25 +41,23 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Mapeamento das etapas do abandono
-step_map = {
-    "dados_cadastrais": "Dados cadastrais",
-    "shippment": "Entrega",
-    "payment": "Pagamento"
-}
-
 # Inserir os dados
 for cart in carts_data:
     try:
         print("\nDEBUG - Carrinho recebido da API:", cart)  # Debug
 
         cart_id = cart.get("id")
-
+        
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
-        customer_phone = tracking.get("phone", "Sem telefone")  # Pegando telefone corretamente
-
+        
+        # Pegando informações do telefone
+        phone_data = tracking.get("phone", {})
+        phone_area_code = phone_data.get("area_code", "Não informado")
+        phone_number = phone_data.get("number", "Sem número")
+        phone_formated = phone_data.get("formated_number", "Não disponível")
+        
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -71,22 +69,17 @@ for cart in carts_data:
 
         total = cart.get("totalizers", {}).get("total", 0)
 
-        # Momento do abandono
-        abandoned_step = cart.get("abandoned_step")  # Pegando corretamente o campo
-        abandoned_step_name = step_map.get(abandoned_step, "Desconhecido")
-        
-        print(f"DEBUG - Etapa de abandono: {abandoned_step} -> {abandoned_step_name}")  # Debug
-
         # Adiciona os dados na planilha
         sheet.append_row([
             cart_id,
             customer_name,
-            customer_phone,
             customer_email,
+            phone_area_code,
+            phone_number,
+            phone_formated,
             product_name,
             quantity,
-            total,
-            abandoned_step_name  # Alterado para abandoned_step_name
+            total
         ])
 
         print(f"Carrinho {cart_id} adicionado com sucesso.")
