@@ -9,7 +9,7 @@ ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 
-# URL da API (sem /export!)
+# URL da API
 URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 
 headers = {
@@ -41,6 +41,13 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
+# Mapeamento das etapas do abandono
+step_map = {
+    "register": "Dados cadastrais",
+    "shipment": "Entrega",
+    "payment": "Pagamento"
+}
+
 # Inserir os dados
 for cart in carts_data:
     try:
@@ -52,11 +59,16 @@ for cart in carts_data:
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # Extraindo telefone corretamente
+        # Extraindo telefone corretamente de dois lugares possíveis
         phone_data = tracking.get("phone", {})
         phone_area_code = phone_data.get("area_code", "N/A")
         phone_number = phone_data.get("number", "N/A")
         phone_formatted = phone_data.get("formated_number", "N/A")
+
+        # Caso o telefone também esteja em "customer_phone"
+        customer_phone = cart.get("customer_phone", "N/A")
+        if customer_phone != "N/A":
+            phone_number = customer_phone  # Usa o número alternativo, se existir
 
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
@@ -69,17 +81,22 @@ for cart in carts_data:
 
         total = cart.get("totalizers", {}).get("total", 0)
 
+        # Pegando o momento do abandono corretamente
+        abandoned_step = cart.get("abandoned_step", "Desconhecido")
+        abandoned_step_name = step_map.get(abandoned_step, abandoned_step)  # Traduz para PT-BR
+
         # Adiciona os dados na planilha
         sheet.append_row([
-            cart_id,
-            customer_name,
-            customer_email,
-            phone_area_code,  # Código de área (DDD)
-            phone_number,  # Número do telefone
-            phone_formatted,  # Número formatado com DDD
-            product_name,
-            quantity,
-            total
+            cart_id,         # ID do carrinho
+            customer_name,   # Nome do cliente
+            customer_email,  # Email
+            phone_area_code, # Código de área (DDD)
+            phone_number,    # Número do telefone
+            phone_formatted, # Número formatado com DDD
+            product_name,    # Nome do produto
+            quantity,        # Quantidade
+            total,           # Valor total
+            abandoned_step_name  # Etapa do abandono
         ])
 
         print(f"Carrinho {cart_id} adicionado com sucesso.")
