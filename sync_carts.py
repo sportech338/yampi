@@ -69,44 +69,55 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Domínio correto do checkout funcional
+# Domínio correto do checkout
 dominio_loja = "seguro.lojasportech.com"
 
-# Definindo o intervalo de "ontem" em UTC
+# Intervalo do dia anterior (UTC)
 hoje_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
 ontem_inicio = (hoje_utc - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 ontem_fim = ontem_inicio + timedelta(days=1)
 
-# Lista para armazenar carrinhos do dia anterior
-carrinhos_ontem = []
+# Lista dos carrinhos válidos
+carrinhos_filtrados = []
 
-# Filtra carrinhos abandonados ou modificados ontem
 for cart in carts_data:
     abandoned_str = cart.get("abandoned_at")
     updated_str = cart.get("updated_at")
 
+    abandoned_at = None
+    updated_at = None
+    motivo = ""
+    data_ref = None
+
     try:
-        abandoned_at = datetime.fromisoformat(abandoned_str.replace("Z", "+00:00")) if abandoned_str else None
-        updated_at = datetime.fromisoformat(updated_str.replace("Z", "+00:00")) if updated_str else None
+        if abandoned_str:
+            abandoned_at = datetime.fromisoformat(abandoned_str.replace("Z", "+00:00"))
+            if ontem_inicio <= abandoned_at < ontem_fim:
+                motivo = "abandonado"
+                data_ref = abandoned_at
+
+        if updated_str and not data_ref:  # Só entra como atualizado se não entrou como abandonado
+            updated_at = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
+            if ontem_inicio <= updated_at < ontem_fim:
+                motivo = "modificado"
+                data_ref = updated_at
+
+        if data_ref:
+            carrinhos_filtrados.append((cart, data_ref, motivo))
+
     except Exception:
         continue
 
-    if (
-        (abandoned_at and ontem_inicio <= abandoned_at < ontem_fim)
-        or (updated_at and ontem_inicio <= updated_at < ontem_fim)
-    ):
-        carrinhos_ontem.append((cart, abandoned_at or updated_at))
+# LOG
+print(f"\n📅 Carrinhos abandonados ou modificados em {ontem_inicio.date()}: {len(carrinhos_filtrados)}")
 
-# LOG elegante
-print(f"\n📅 Carrinhos abandonados ou modificados em {ontem_inicio.date()}: {len(carrinhos_ontem)}")
-
-if len(carrinhos_ontem) == 0:
-    print("ℹ️ Nenhum carrinho abandonado ou modificado encontrado ontem. Nada será enviado para a planilha.")
+if len(carrinhos_filtrados) == 0:
+    print("ℹ️ Nenhum carrinho será enviado para a planilha.")
 else:
     print("🚀 Enviando carrinhos para a planilha...\n")
 
-# Loop dos carrinhos filtrados
-for cart, data_ref in carrinhos_ontem:
+# Envia para a planilha
+for cart, data_ref, motivo in carrinhos_filtrados:
     try:
         cart_id = cart.get("id")
         token = cart.get("token", "")
@@ -131,10 +142,7 @@ for cart, data_ref in carrinhos_ontem:
 
         total = cart.get("totalizers", {}).get("total", 0)
 
-        if token:
-            link_checkout = f"https://{dominio_loja}/cart?cart_token={token}"
-        else:
-            link_checkout = "Não encontrado"
+        link_checkout = f"https://{dominio_loja}/cart?cart_token={token}" if token else "Não encontrado"
 
         sheet.append_row([
             cart_id,
@@ -148,7 +156,7 @@ for cart, data_ref in carrinhos_ontem:
             link_checkout
         ])
 
-        print(f"✅ Carrinho {cart_id} (última modificação às {data_ref.strftime('%H:%M')}) adicionado com sucesso.")
+        print(f"✅ Carrinho {cart_id} ({motivo} às {data_ref.strftime('%H:%M')}) adicionado com sucesso.")
 
     except Exception as e:
         import traceback
