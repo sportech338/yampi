@@ -67,14 +67,21 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Domínio correto da loja para link funcional de checkout abandonado
+# Domínio correto da loja para o link de checkout funcional
 dominio_loja = "www.lojasportech.com"
 
 # Loop dos carrinhos
 for cart in carts_data:
     try:
-        # 1. CARRINHO
+        # DEBUG: mostrar token e link
         cart_id = cart.get("id")
+        token = cart.get("token", "")
+
+        print(f"\n🛒 CARRINHO ID: {cart_id}")
+        print(f"🔐 TOKEN: {token}")
+        print(f"🔗 LINK GERADO: https://{dominio_loja}/checkout/review/{token}")
+        print("📦 CONTEÚDO DO CARRINHO (RESUMO):")
+        print(json.dumps(cart, indent=2, ensure_ascii=False)[:2000])  # até 2000 caracteres
 
         # 2. NOME DO CLIENTE
         tracking = cart.get("tracking_data", {})
@@ -107,29 +114,28 @@ for cart in carts_data:
         total = cart.get("totalizers", {}).get("total", 0)
 
         # 9. LINK CHECKOUT funcional
-        token = cart.get("token", "")
         if token:
             link_checkout = f"https://{dominio_loja}/checkout/review/{token}"
         else:
             link_checkout = "Não encontrado"
 
-        # Envia para o Google Sheets
+        # Envia para o Google Sheets na ordem certa
         sheet.append_row([
-            cart_id,                            # CARRINHO
-            customer_name,                      # NOME DO CLIENTE
-            customer_email,                     # EMAIL
-            cpf,                                # CPF
-            telefone_cru or "Não encontrado",   # NÚMERO
-            telefone_formatado or "Não encontrado",  # FORMATO DO NÚMERO
-            product_name,                       # NOME DO PRODUTO
-            quantity,                           # QUANTIDADE
-            total,                              # VALOR TOTAL
-            link_checkout                       # LINK CHECKOUT FUNCIONAL
+            cart_id,
+            customer_name,
+            customer_email,
+            cpf,
+            telefone_cru or "Não encontrado",
+            telefone_formatado or "Não encontrado",
+            product_name,
+            quantity,
+            total,
+            link_checkout
         ])
 
-        print(f"Carrinho {cart_id} adicionado com sucesso.")
+        print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
 
     except Exception as e:
         import traceback
-        print("Erro ao processar um carrinho:")
+        print("❌ Erro ao processar um carrinho:")
         traceback.print_exc()
