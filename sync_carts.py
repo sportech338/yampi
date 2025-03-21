@@ -12,8 +12,15 @@ ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 
-# URL da API
-URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
+# Timezone São Paulo
+tz_sp = pytz.timezone("America/Sao_Paulo")
+hoje_sp = datetime.now(tz_sp).date()
+ontem_sp = hoje_sp - timedelta(days=1)
+data_inicio = ontem_sp.strftime("%Y-%m-%d")
+data_fim = data_inicio  # mesmo dia
+
+# URL correta com filtro por data
+URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts/export?date_from={data_inicio}&date_to={data_fim}"
 
 headers = {
     "User-token": TOKEN,
@@ -21,14 +28,14 @@ headers = {
     "Accept": "application/json"
 }
 
-# Requisição para a Yampi
+# Requisição para a Yampi (endpoint de exportação)
 response = requests.get(URL, headers=headers)
 
 if response.status_code == 200:
     carts_data = response.json().get("data", [])
-    print(f"Carrinhos abandonados encontrados: {len(carts_data)}")
+    print(f"✅ Carrinhos encontrados no dia {data_inicio}: {len(carts_data)}")
 else:
-    print("Erro ao buscar carrinhos:", response.status_code)
+    print("❌ Erro ao buscar carrinhos:", response.status_code)
     print(response.text)
     carts_data = []
 
@@ -72,11 +79,6 @@ def formatar_telefone(numero):
 # Domínio correto do checkout funcional
 dominio_loja = "seguro.lojasportech.com"
 
-# Timezone São Paulo
-tz_sp = pytz.timezone("America/Sao_Paulo")
-hoje_sp = datetime.now(tz_sp).date()
-ontem_sp = hoje_sp - timedelta(days=1)
-
 # Verifica carrinhos já na planilha
 print("🔍 Buscando carrinhos já existentes na planilha para evitar duplicações...")
 try:
@@ -93,6 +95,11 @@ except Exception as e:
 # Loop dos carrinhos
 for cart in carts_data:
     try:
+        cart_id = cart.get("id")
+        if cart_id in ids_existentes:
+            print(f"⏩ Carrinho {cart_id} já está na planilha. Pulando.")
+            continue
+
         updated_at_str = cart.get("updated_at", {}).get("date")
         if not updated_at_str:
             continue
@@ -101,18 +108,6 @@ for cart in carts_data:
             updated_at_sp = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S.%f")
         except ValueError:
             updated_at_sp = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S")
-
-        # A data já está no fuso de São Paulo — não aplicar conversão
-        data_cart = updated_at_sp.date()
-
-        if data_cart != ontem_sp:
-            print(f"⏩ Carrinho {cart.get('id')} descartado. updated_at = {updated_at_sp.strftime('%d/%m/%Y %H:%M:%S')} (esperado: {ontem_sp.strftime('%d/%m/%Y')})")
-            continue
-
-        cart_id = cart.get("id")
-        if cart_id in ids_existentes:
-            print(f"⏩ Carrinho {cart_id} já está na planilha. Pulando.")
-            continue
 
         token = cart.get("token", "")
         print(f"\n🛒 CARRINHO ID: {cart_id}")
