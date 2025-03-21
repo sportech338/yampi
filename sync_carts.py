@@ -69,20 +69,27 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Domínio correto do checkout
+# Domínio correto do checkout funcional
 dominio_loja = "seguro.lojasportech.com"
 
-# Intervalo do dia anterior (UTC)
+# Intervalo de ontem em UTC
 hoje_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
 ontem_inicio = (hoje_utc - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 ontem_fim = ontem_inicio + timedelta(days=1)
 
-# Lista dos carrinhos válidos
+# Lista dos carrinhos que serão enviados
 carrinhos_filtrados = []
 
+print("\n📋 DEBUG DAS DATAS DOS CARRINHOS:")
+
 for cart in carts_data:
+    cart_id = cart.get("id")
     abandoned_str = cart.get("abandoned_at")
     updated_str = cart.get("updated_at")
+
+    print(f"- Carrinho ID {cart_id}")
+    print(f"  abandoned_at: {abandoned_str}")
+    print(f"  updated_at:   {updated_str}")
 
     abandoned_at = None
     updated_at = None
@@ -96,7 +103,7 @@ for cart in carts_data:
                 motivo = "abandonado"
                 data_ref = abandoned_at
 
-        if updated_str and not data_ref:  # Só entra como atualizado se não entrou como abandonado
+        if updated_str and not data_ref:
             updated_at = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
             if ontem_inicio <= updated_at < ontem_fim:
                 motivo = "modificado"
@@ -105,10 +112,10 @@ for cart in carts_data:
         if data_ref:
             carrinhos_filtrados.append((cart, data_ref, motivo))
 
-    except Exception:
-        continue
+    except Exception as e:
+        print(f"  ⚠️ Erro ao converter datas do carrinho {cart_id}: {e}")
 
-# LOG
+# LOG final
 print(f"\n📅 Carrinhos abandonados ou modificados em {ontem_inicio.date()}: {len(carrinhos_filtrados)}")
 
 if len(carrinhos_filtrados) == 0:
@@ -116,7 +123,7 @@ if len(carrinhos_filtrados) == 0:
 else:
     print("🚀 Enviando carrinhos para a planilha...\n")
 
-# Envia para a planilha
+# Envio para o Google Sheets
 for cart, data_ref, motivo in carrinhos_filtrados:
     try:
         cart_id = cart.get("id")
