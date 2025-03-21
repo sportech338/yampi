@@ -42,24 +42,24 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Auxiliar: extrai número de telefone de string
-def extrair_telefone(texto):
+# Função para extrair o primeiro telefone válido de qualquer texto
+def extrair_telefone_em_tudo(texto):
+    # Regex para capturar números com ou sem DDD e traço
     match = re.search(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     if match:
         return match.group()
     return ""
 
-# Auxiliar: formata número no padrão brasileiro
+# Função para formatar qualquer número no padrão (XX) XXXXX-XXXX
 def formatar_telefone(numero):
-    digitos = re.sub(r'\D', '', numero)  # remove tudo que não for número
+    digitos = re.sub(r'\D', '', numero)
     if len(digitos) == 10:
         return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
     elif len(digitos) == 11:
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
-    else:
-        return numero  # retorna do jeito que veio se não bater o padrão
+    return numero  # se não conseguir formatar, retorna original
 
-# Inserir os dados
+# Loop para processar os carrinhos
 for cart in carts_data:
     try:
         cart_id = cart.get("id")
@@ -67,47 +67,10 @@ for cart in carts_data:
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # Tentando puxar telefone de várias fontes
-        phone_area_code = ""
-        phone_number = ""
-        phone_formatted = ""
-
-        phone_data = tracking.get("phone")
-
-        # Caso seja objeto
-        if isinstance(phone_data, dict):
-            phone_area_code = phone_data.get("area_code", "")
-            phone_number = phone_data.get("number", "")
-            phone_formatted = phone_data.get("formated_number", "")
-        # Caso seja string simples
-        elif isinstance(phone_data, str):
-            phone_number = phone_data
-            phone_formatted = phone_data
-
-        # tracking_data.customer_phone
-        if not phone_number:
-            tracking_phone = tracking.get("customer_phone")
-            if isinstance(tracking_phone, str):
-                phone_number = tracking_phone
-                phone_formatted = tracking_phone
-
-        # cart.customer_phone
-        if not phone_number:
-            customer_phone = cart.get("customer_phone")
-            if isinstance(customer_phone, str):
-                phone_number = customer_phone
-                phone_formatted = customer_phone
-
-        # Última tentativa: buscar qualquer número dentro de tracking_data como string
-        if not phone_number:
-            tracking_json_str = json.dumps(tracking)
-            telefone_extraido = extrair_telefone(tracking_json_str)
-            if telefone_extraido:
-                phone_number = telefone_extraido
-                phone_formatted = telefone_extraido
-
-        # Aplica formatação final
-        phone_formatted = formatar_telefone(phone_formatted)
+        # Agora vamos buscar o telefone em TODO o carrinho
+        cart_json_str = json.dumps(cart)
+        telefone_cru = extrair_telefone_em_tudo(cart_json_str)
+        telefone_formatado = formatar_telefone(telefone_cru)
 
         # Produto
         items_data = cart.get("items", {}).get("data", [])
@@ -126,9 +89,9 @@ for cart in carts_data:
             cart_id,
             customer_name,
             customer_email,
-            phone_area_code,
-            phone_number,
-            phone_formatted,
+            "",  # DDD separado (removido porque vamos usar o formatado)
+            telefone_cru,
+            telefone_formatado,
             product_name,
             quantity,
             total
