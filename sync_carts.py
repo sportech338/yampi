@@ -4,6 +4,8 @@ from google.oauth2.service_account import Credentials
 import os
 import json
 import re
+from datetime import datetime, timedelta
+import pytz
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -70,30 +72,40 @@ def formatar_telefone(numero):
 # Domínio correto do checkout funcional
 dominio_loja = "seguro.lojasportech.com"
 
+# Definindo o intervalo de "ontem" em UTC
+hoje_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
+ontem_inicio = (hoje_utc - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+ontem_fim = ontem_inicio + timedelta(days=1)
+
 # Loop dos carrinhos
 for cart in carts_data:
     try:
-        # DEBUG
+        # Verifica se foi abandonado ontem
+        abandoned_at_str = cart.get("abandoned_at")
+        if not abandoned_at_str:
+            continue
+
+        try:
+            abandoned_at = datetime.fromisoformat(abandoned_at_str.replace("Z", "+00:00"))
+        except Exception:
+            continue
+
+        if not (ontem_inicio <= abandoned_at < ontem_fim):
+            continue  # pula se não foi abandonado ontem
+
+        # Dados principais
         cart_id = cart.get("id")
         token = cart.get("token", "")
-        print(f"\n🛒 CARRINHO ID: {cart_id}")
-        print(f"🔐 TOKEN: {token}")
-        print(f"🔗 LINK GERADO: https://{dominio_loja}/cart?cart_token={token}")
-        print("📦 CONTEÚDO DO CARRINHO:")
-        print(json.dumps(cart, indent=2, ensure_ascii=False)[:2000])
 
-        # Nome e email
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # CPF e telefone
         cart_json_str = json.dumps(cart)
         cpf = extrair_cpf(cart_json_str)
         telefone = extrair_telefone(cart_json_str)
         telefone_formatado = formatar_telefone(telefone)
 
-        # Produto
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -105,13 +117,12 @@ for cart in carts_data:
 
         total = cart.get("totalizers", {}).get("total", 0)
 
-        # Link funcional do checkout
         if token:
             link_checkout = f"https://{dominio_loja}/cart?cart_token={token}"
         else:
             link_checkout = "Não encontrado"
 
-        # Envia para o Google Sheets (sem a coluna "NÚMERO")
+        # Envia para o Google Sheets
         sheet.append_row([
             cart_id,
             customer_name,
@@ -124,7 +135,7 @@ for cart in carts_data:
             link_checkout
         ])
 
-        print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
+        print(f"✅ Carrinho {cart_id} (abandonado em {abandoned_at}) adicionado com sucesso.")
 
     except Exception as e:
         import traceback
