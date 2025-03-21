@@ -70,11 +70,27 @@ def formatar_telefone(numero):
 # Domínio correto do checkout funcional
 dominio_loja = "seguro.lojasportech.com"
 
+# 🔄 Lê os IDs existentes na planilha
+print("🔍 Verificando carrinhos já salvos para evitar duplicação...")
+ids_existentes = set()
+try:
+    valores = sheet.get_all_values()
+    for row in valores[1:]:  # Ignora o cabeçalho
+        if row and row[0].isdigit():
+            ids_existentes.add(int(row[0]))
+    print(f"🔒 {len(ids_existentes)} carrinhos já registrados.")
+except Exception as e:
+    print("⚠️ Não foi possível ler os dados da planilha.")
+    ids_existentes = set()
+
 # Loop dos carrinhos
 for cart in carts_data:
     try:
-        # DEBUG
         cart_id = cart.get("id")
+        if cart_id in ids_existentes:
+            print(f"⏩ Carrinho {cart_id} já está na planilha. Pulando.")
+            continue
+
         token = cart.get("token", "")
         print(f"\n🛒 CARRINHO ID: {cart_id}")
         print(f"🔐 TOKEN: {token}")
@@ -82,18 +98,15 @@ for cart in carts_data:
         print("📦 CONTEÚDO DO CARRINHO:")
         print(json.dumps(cart, indent=2, ensure_ascii=False)[:2000])
 
-        # Nome e email
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # CPF e telefone
         cart_json_str = json.dumps(cart)
         cpf = extrair_cpf(cart_json_str)
         telefone = extrair_telefone(cart_json_str)
         telefone_formatado = formatar_telefone(telefone)
 
-        # Produto
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -105,13 +118,9 @@ for cart in carts_data:
 
         total = cart.get("totalizers", {}).get("total", 0)
 
-        # Link funcional do checkout
-        if token:
-            link_checkout = f"https://{dominio_loja}/cart?cart_token={token}"
-        else:
-            link_checkout = "Não encontrado"
+        link_checkout = f"https://{dominio_loja}/cart?cart_token={token}" if token else "Não encontrado"
 
-        # Envia para o Google Sheets (sem a coluna "NÚMERO")
+        # Envia para o Google Sheets (sem duplicação)
         sheet.append_row([
             cart_id,
             customer_name,
