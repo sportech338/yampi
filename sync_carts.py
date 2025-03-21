@@ -11,8 +11,9 @@ ALIAS = "sportech"  # Substitua pelo alias da sua loja
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 print(f"Token Yampi: {TOKEN}")
 SHEET_ID = "1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E"
-# URL da API
-URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
+# URL da API (endpoint correto para exportação de carrinhos abandonados)
+URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts/export"
+
 
 # Filtrar dados das últimas 24h
 tz_brasil = pytz.timezone("America/Sao_Paulo")
