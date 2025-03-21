@@ -43,9 +43,9 @@ sheet = spreadsheet.sheet1
 
 # Mapeamento das etapas do abandono
 step_map = {
-    1: "Dados cadastrais",
-    2: "Entrega",
-    3: "Pagamento"
+    "dados_cadastrais": "Dados cadastrais",
+    "shippment": "Entrega",
+    "payment": "Pagamento"
 }
 
 # Inserir os dados
@@ -86,7 +86,7 @@ for cart in carts_data:
             product_name,
             quantity,
             total,
-            abandoned_step_name  # Alterado para abandoned_step
+            abandoned_step_name  # Alterado para abandoned_step_name
         ])
 
         print(f"Carrinho {cart_id} adicionado com sucesso.")
