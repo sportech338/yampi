@@ -1,11 +1,83 @@
-# ... (mantém todas as importações e configurações anteriores)
+import requests
+import gspread
+from google.oauth2.service_account import Credentials
+import os
+import json
+import re
+from datetime import datetime, timedelta
+import pytz  # Importado corretamente
+
+# CONFIGURAÇÕES
+ALIAS = "sportech"
+TOKEN = os.getenv("YAMPI_API_TOKEN")
+SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
+
+# URL da API
+URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
+
+headers = {
+    "User-token": TOKEN,
+    "User-Secret-Key": SECRET_KEY,
+    "Accept": "application/json"
+}
+
+# Requisição para a Yampi
+response = requests.get(URL, headers=headers)
+
+if response.status_code == 200:
+    carts_data = response.json().get("data", [])
+    print(f"Carrinhos abandonados encontrados: {len(carts_data)}")
+else:
+    print("Erro ao buscar carrinhos:", response.status_code)
+    print(response.text)
+    carts_data = []
+
+# Autenticação com Google Sheets
+scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+credentials_dict = json.loads(creds_json)
+credentials = Credentials.from_service_account_info(credentials_dict, scopes=scope)
+client = gspread.authorize(credentials)
+
+# Planilha
+SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
+spreadsheet = client.open_by_key(SPREADSHEET_ID)
+sheet = spreadsheet.sheet1
+
+# Funções auxiliares
+def extrair_cpf(texto):
+    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
+    if match:
+        cpf = re.sub(r'\D', '', match.group())
+        if len(cpf) == 11:
+            return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
+    return "Não encontrado"
+
+def extrair_telefone(texto):
+    matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
+    for numero in matches:
+        apenas_digitos = re.sub(r'\D', '', numero)
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
+            return numero
+    return ""
+
+def formatar_telefone(numero):
+    digitos = re.sub(r'\D', '', numero)
+    if len(digitos) == 10:
+        return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
+    elif len(digitos) == 11:
+        return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
+    return ""
+
+# Domínio correto do checkout funcional
+dominio_loja = "seguro.lojasportech.com"
 
 # Timezone São Paulo
 tz_sp = pytz.timezone("America/Sao_Paulo")
 hoje_sp = datetime.now(tz_sp).date()
 ontem_sp = hoje_sp - timedelta(days=1)
 
-# 🔄 Lê todos os IDs já inseridos na planilha para evitar duplicações
+# Verificar IDs já existentes na planilha
 print("🔍 Buscando carrinhos já existentes na planilha para evitar duplicações...")
 try:
     ids_existentes = set()
@@ -36,7 +108,6 @@ for cart in carts_data:
         if data_cart != ontem_sp:
             continue
 
-        # Verifica duplicata
         cart_id = cart.get("id")
         if cart_id in ids_existentes:
             print(f"⏩ Carrinho {cart_id} já está na planilha. Pulando.")
