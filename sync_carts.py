@@ -69,7 +69,7 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Domínio correto do checkout funcional
+# Domínio do checkout
 dominio_loja = "seguro.lojasportech.com"
 
 # Intervalo de ontem em UTC
@@ -77,7 +77,7 @@ hoje_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
 ontem_inicio = (hoje_utc - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 ontem_fim = ontem_inicio + timedelta(days=1)
 
-# Lista dos carrinhos que serão enviados
+# Lista dos carrinhos válidos
 carrinhos_filtrados = []
 
 print("\n📋 DEBUG DAS DATAS DOS CARRINHOS:")
@@ -85,11 +85,11 @@ print("\n📋 DEBUG DAS DATAS DOS CARRINHOS:")
 for cart in carts_data:
     cart_id = cart.get("id")
     abandoned_str = cart.get("abandoned_at")
-    updated_str = cart.get("updated_at")
+    updated_raw = cart.get("updated_at")
 
     print(f"- Carrinho ID {cart_id}")
     print(f"  abandoned_at: {abandoned_str}")
-    print(f"  updated_at:   {updated_str}")
+    print(f"  updated_at:   {updated_raw}")
 
     abandoned_at = None
     updated_at = None
@@ -97,14 +97,21 @@ for cart in carts_data:
     data_ref = None
 
     try:
+        # abandoned_at: string ISO
         if abandoned_str:
             abandoned_at = datetime.fromisoformat(abandoned_str.replace("Z", "+00:00"))
             if ontem_inicio <= abandoned_at < ontem_fim:
                 motivo = "abandonado"
                 data_ref = abandoned_at
 
-        if updated_str and not data_ref:
-            updated_at = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
+        # updated_at: vem como dicionário com fuso horário
+        if isinstance(updated_raw, dict) and "date" in updated_raw and not data_ref:
+            updated_str = updated_raw["date"]
+            updated_naive = datetime.strptime(updated_str, "%Y-%m-%d %H:%M:%S.%f")
+            sp_tz = pytz.timezone("America/Sao_Paulo")
+            updated_local = sp_tz.localize(updated_naive)
+            updated_at = updated_local.astimezone(pytz.UTC)
+
             if ontem_inicio <= updated_at < ontem_fim:
                 motivo = "modificado"
                 data_ref = updated_at
@@ -113,7 +120,7 @@ for cart in carts_data:
             carrinhos_filtrados.append((cart, data_ref, motivo))
 
     except Exception as e:
-        print(f"  ⚠️ Erro ao converter datas do carrinho {cart_id}: {e}")
+        print(f"  ⚠️ Erro ao processar datas do carrinho {cart_id}: {e}")
 
 # LOG final
 print(f"\n📅 Carrinhos abandonados ou modificados em {ontem_inicio.date()}: {len(carrinhos_filtrados)}")
@@ -123,7 +130,7 @@ if len(carrinhos_filtrados) == 0:
 else:
     print("🚀 Enviando carrinhos para a planilha...\n")
 
-# Envio para o Google Sheets
+# Envia para o Google Sheets
 for cart, data_ref, motivo in carrinhos_filtrados:
     try:
         cart_id = cart.get("id")
