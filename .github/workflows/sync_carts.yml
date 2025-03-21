@@ -2,7 +2,7 @@ name: Sync Carts from Yampi to Google Sheets
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # Executa todos os dias às 2h da manhã (UTC)
+    - cron: '0 2 * * *'  # Executa todos os dias às 2h da manhã (horário UTC)
   workflow_dispatch:  # Permite rodar manualmente pelo GitHub Actions
 
 jobs:
@@ -31,5 +31,6 @@ jobs:
       - name: Rodar o script de sincronização
         env:
           YAMPI_API_TOKEN: ${{ secrets.YAMPI_API_TOKEN }}
+          YAMPI_SECRET_KEY: ${{ secrets.YAMPI_SECRET_KEY }}
           GOOGLE_APPLICATION_CREDENTIALS: creds.json
         run: python sync_carts.py
