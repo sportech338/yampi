@@ -1,29 +1,56 @@
 import requests
-import json
+import gspread
+from google.oauth2.service_account import Credentials
 import os
+import json
 
 # CONFIGURAÇÕES
-ALIAS = "sportech"  # Substitua pelo alias da sua loja
-TOKEN = os.getenv("YAMPI_API_TOKEN")  # Token da Yampi vindo dos secrets
-SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")  # Chave secreta da Yampi vinda dos secrets
+ALIAS = "sportech"
+TOKEN = os.getenv("YAMPI_API_TOKEN")
+SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 
-# URL da API (endpoint para obter carrinhos abandonados)
+# URL da API - OBS: NÃO USAR "/export", pois esse endpoint só envia um e-mail com a planilha
 URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 
-# Definindo os cabeçalhos corretos para autenticação
+# Cabeçalhos de autenticação
 headers = {
-    "User-token": TOKEN,           # Token da Yampi
-    "User-Secret-Key": SECRET_KEY, # Chave secreta da Yampi
+    "User-token": TOKEN,
+    "User-Secret-Key": SECRET_KEY,
     "Accept": "application/json"
 }
 
-# Realizando a requisição para a API Yampi
+# Requisição à API da Yampi
 response = requests.get(URL, headers=headers)
 
-# Se a resposta for bem-sucedida (status 200)
 if response.status_code == 200:
     carts_data = response.json().get("data", [])
-    print(f"Carrinhos abandonados: {carts_data}")
+    print(f"Carrinhos abandonados encontrados: {len(carts_data)}")
 else:
     print("Erro ao buscar carrinhos:", response.status_code)
     print(response.text)
+    carts_data = []
+
+# Autenticar no Google Sheets usando o JSON da variável de ambiente
+scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+credentials_dict = json.loads(creds_json)
+credentials = Credentials.from_service_account_info(credentials_dict, scopes=scope)
+client = gspread.authorize(credentials)
+
+# Conectar à planilha
+SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
+spreadsheet = client.open_by_key(SPREADSHEET_ID)
+sheet = spreadsheet.sheet1
+
+# Inserir os dados dos carrinhos abandonados
+for cart in carts_data:
+    try:
+        customer_name = cart['tracking_data']['name']
+        customer_email = cart['tracking_data']['email']
+        product_name = cart['items'][0]['sku']['data']['title']
+        total = cart['totalizers']['total']
+        
+        sheet.append_row([customer_name, customer_email, product_name, total])
+        print(f"Carrinho de {customer_name} adicionado com sucesso.")
+    except Exception as e:
+        print("Erro ao processar um carrinho:", e)
