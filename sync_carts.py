@@ -29,11 +29,11 @@ else:
     print(response.text)
     carts_data = []
 
-# Salvar o JSON da API em um arquivo local para análise
+# Salvar o JSON da API para debug
 with open("debug.json", "w", encoding="utf-8") as f:
     json.dump(carts_data, f, indent=4, ensure_ascii=False)
 
-print("Arquivo debug.json salvo com sucesso! Verifique o conteúdo para analisar os telefones.")
+print("Arquivo debug.json salvo com sucesso.")
 
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -47,38 +47,35 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Mapeamento das etapas do abandono
-step_map = {
-    "register": "Dados cadastrais",
-    "shipment": "Entrega",
-    "payment": "Pagamento"
-}
-
 # Inserir os dados
 for cart in carts_data:
     try:
-        print("\nDEBUG - Carrinho recebido da API:", json.dumps(cart, indent=4))  # Debug para analisar a estrutura exata
-
         cart_id = cart.get("id")
-
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # Depuração do telefone
-        print(f"\nDEBUG - Dados de telefone do carrinho {cart_id}: {tracking.get('phone', 'N/A')}")
+        # Tenta obter o telefone a partir das várias fontes possíveis
+        phone_area_code = ""
+        phone_number = ""
+        phone_formatted = ""
 
-        # Extraindo telefone corretamente
-        phone_data = tracking.get("phone", {})
-        phone_area_code = phone_data.get("area_code", "N/A")
-        phone_number = phone_data.get("number", "N/A")
-        phone_formatted = phone_data.get("formated_number", "N/A")
+        phone_data = tracking.get("phone")
+        if isinstance(phone_data, dict):
+            phone_area_code = phone_data.get("area_code", "")
+            phone_number = phone_data.get("number", "")
+            phone_formatted = phone_data.get("formated_number", "")
+        elif isinstance(phone_data, str):
+            phone_number = phone_data
+            phone_formatted = phone_data
 
-        # Caso o telefone também esteja em "customer_phone"
-        customer_phone = cart.get("customer_phone", "N/A")
-        if customer_phone != "N/A":
-            phone_number = customer_phone  # Usa o número alternativo, se existir
+        # Se ainda não tem telefone, tenta pegar de customer_phone direto
+        if not phone_number:
+            customer_phone = cart.get("customer_phone", "")
+            phone_number = customer_phone
+            phone_formatted = customer_phone
 
+        # Produto
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -90,22 +87,17 @@ for cart in carts_data:
 
         total = cart.get("totalizers", {}).get("total", 0)
 
-        # Pegando o momento do abandono corretamente
-        abandoned_step = cart.get("abandoned_step", "Desconhecido")
-        abandoned_step_name = step_map.get(abandoned_step, abandoned_step)  # Traduz para PT-BR
-
-        # Adiciona os dados na planilha
+        # Envia para o Google Sheets
         sheet.append_row([
-            cart_id,         # ID do carrinho
-            customer_name,   # Nome do cliente
-            customer_email,  # Email
-            phone_area_code, # Código de área (DDD)
-            phone_number,    # Número do telefone
-            phone_formatted, # Número formatado com DDD
-            product_name,    # Nome do produto
-            quantity,        # Quantidade
-            total,           # Valor total
-            abandoned_step_name  # Etapa do abandono
+            cart_id,
+            customer_name,
+            customer_email,
+            phone_area_code,
+            phone_number,
+            phone_formatted,
+            product_name,
+            quantity,
+            total
         ])
 
         print(f"Carrinho {cart_id} adicionado com sucesso.")
