@@ -4,23 +4,31 @@ from google.oauth2.service_account import Credentials
 import os
 import json
 import re
-from datetime import datetime, timedelta
-import pytz
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
-DOMINIO_LOJA = "seguro.lojasportech.com"
 
-# URL base da API com paginação
-BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
+# URL da API
+URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 
 headers = {
     "User-token": TOKEN,
     "User-Secret-Key": SECRET_KEY,
     "Accept": "application/json"
 }
+
+# Requisição para a Yampi
+response = requests.get(URL, headers=headers)
+
+if response.status_code == 200:
+    carts_data = response.json().get("data", [])
+    print(f"Carrinhos abandonados encontrados: {len(carts_data)}")
+else:
+    print("Erro ao buscar carrinhos:", response.status_code)
+    print(response.text)
+    carts_data = []
 
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -59,100 +67,33 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Fuso horário
-fuso_sp = pytz.timezone("America/Sao_Paulo")
-agora_sp = datetime.now(fuso_sp)
-ontem_sp_inicio = (agora_sp - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-ontem_sp_fim = ontem_sp_inicio + timedelta(days=1)
-ontem_inicio_utc = ontem_sp_inicio.astimezone(pytz.UTC)
-ontem_fim_utc = ontem_sp_fim.astimezone(pytz.UTC)
+# Domínio correto do checkout funcional
+dominio_loja = "seguro.lojasportech.com"
 
-# Coleta todas as páginas da API
-print("📥 Buscando carrinhos da Yampi com paginação...")
-todos_carrinhos = []
-pagina = 1
-
-while True:
-    response = requests.get(f"{BASE_URL}?page={pagina}", headers=headers)
-    if response.status_code != 200:
-        print(f"❌ Erro na página {pagina}: {response.status_code}")
-        break
-
-    data = response.json().get("data", [])
-    if not data:
-        break  # fim das páginas
-
-    todos_carrinhos.extend(data)
-    print(f"📄 Página {pagina} carregada: {len(data)} carrinhos.")
-    pagina += 1
-
-print(f"\n📦 Total de carrinhos retornados pela Yampi: {len(todos_carrinhos)}")
-
-# Filtra carrinhos abandonados ou modificados ontem
-carrinhos_filtrados = []
-
-print("\n📋 DEBUG DAS DATAS DOS CARRINHOS:")
-for cart in todos_carrinhos:
-    cart_id = cart.get("id")
-    abandoned_str = cart.get("abandoned_at")
-    updated_raw = cart.get("updated_at")
-
-    print(f"- Carrinho ID {cart_id}")
-    print(f"  abandoned_at: {abandoned_str}")
-    print(f"  updated_at:   {updated_raw}")
-
-    abandoned_at = None
-    updated_at = None
-    motivo = ""
-    data_ref = None
-
+# Loop dos carrinhos
+for cart in carts_data:
     try:
-        # abandoned_at (ISO string UTC)
-        if abandoned_str:
-            abandoned_at = datetime.fromisoformat(abandoned_str.replace("Z", "+00:00"))
-            if ontem_inicio_utc <= abandoned_at < ontem_fim_utc:
-                motivo = "abandonado"
-                data_ref = abandoned_at
-
-        # updated_at (dict com date + timezone)
-        if isinstance(updated_raw, dict) and "date" in updated_raw and not data_ref:
-            updated_str = updated_raw["date"]
-            updated_naive = datetime.strptime(updated_str, "%Y-%m-%d %H:%M:%S.%f")
-            updated_local = fuso_sp.localize(updated_naive)
-            updated_at = updated_local.astimezone(pytz.UTC)
-            if ontem_inicio_utc <= updated_at < ontem_fim_utc:
-                motivo = "modificado"
-                data_ref = updated_at
-
-        if data_ref:
-            carrinhos_filtrados.append((cart, data_ref, motivo))
-
-    except Exception as e:
-        print(f"  ⚠️ Erro ao processar datas do carrinho {cart_id}: {e}")
-
-# Log final
-print(f"\n📅 Carrinhos abandonados ou modificados em {ontem_sp_inicio.date()} (horário de São Paulo): {len(carrinhos_filtrados)}")
-
-if not carrinhos_filtrados:
-    print("ℹ️ Nenhum carrinho será enviado para a planilha.")
-else:
-    print("🚀 Enviando carrinhos para a planilha...\n")
-
-# Envia para a planilha
-for cart, data_ref, motivo in carrinhos_filtrados:
-    try:
+        # DEBUG
         cart_id = cart.get("id")
         token = cart.get("token", "")
+        print(f"\n🛒 CARRINHO ID: {cart_id}")
+        print(f"🔐 TOKEN: {token}")
+        print(f"🔗 LINK GERADO: https://{dominio_loja}/cart?cart_token={token}")
+        print("📦 CONTEÚDO DO CARRINHO:")
+        print(json.dumps(cart, indent=2, ensure_ascii=False)[:2000])
 
+        # Nome e email
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
+        # CPF e telefone
         cart_json_str = json.dumps(cart)
         cpf = extrair_cpf(cart_json_str)
         telefone = extrair_telefone(cart_json_str)
         telefone_formatado = formatar_telefone(telefone)
 
+        # Produto
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -163,8 +104,14 @@ for cart, data_ref, motivo in carrinhos_filtrados:
             quantity = 0
 
         total = cart.get("totalizers", {}).get("total", 0)
-        link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
+        # Link funcional do checkout
+        if token:
+            link_checkout = f"https://{dominio_loja}/cart?cart_token={token}"
+        else:
+            link_checkout = "Não encontrado"
+
+        # Envia para o Google Sheets (sem a coluna "NÚMERO")
         sheet.append_row([
             cart_id,
             customer_name,
@@ -177,7 +124,7 @@ for cart, data_ref, motivo in carrinhos_filtrados:
             link_checkout
         ])
 
-        print(f"✅ Carrinho {cart_id} ({motivo} às {data_ref.strftime('%H:%M')}) adicionado com sucesso.")
+        print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
 
     except Exception as e:
         import traceback
