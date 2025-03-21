@@ -42,24 +42,30 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Função para extrair o primeiro telefone válido de qualquer texto
+# Extrai telefone e ignora padrões de CPF
 def extrair_telefone_em_tudo(texto):
-    # Regex para capturar números com ou sem DDD e traço
-    match = re.search(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
-    if match:
-        return match.group()
+    # Regex de telefone com ou sem traço, com DDD
+    matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
+    for numero in matches:
+        # Remove não-dígitos pra analisar
+        apenas_digitos = re.sub(r'\D', '', numero)
+        # Telefones brasileiros válidos com DDD: 10 ou 11 dígitos
+        if len(apenas_digitos) in [10, 11]:
+            # Evita CPFs (geralmente começam com 0, 1, 2 e têm formato xxx.xxx.xxx-xx)
+            if not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
+                return numero
     return ""
 
-# Função para formatar qualquer número no padrão (XX) XXXXX-XXXX
+# Formata número no estilo (11) 91234-5678
 def formatar_telefone(numero):
     digitos = re.sub(r'\D', '', numero)
     if len(digitos) == 10:
         return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
     elif len(digitos) == 11:
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
-    return numero  # se não conseguir formatar, retorna original
+    return ""
 
-# Loop para processar os carrinhos
+# Processamento dos carrinhos
 for cart in carts_data:
     try:
         cart_id = cart.get("id")
@@ -67,7 +73,7 @@ for cart in carts_data:
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # Agora vamos buscar o telefone em TODO o carrinho
+        # Busca por telefone válido
         cart_json_str = json.dumps(cart)
         telefone_cru = extrair_telefone_em_tudo(cart_json_str)
         telefone_formatado = formatar_telefone(telefone_cru)
@@ -89,9 +95,9 @@ for cart in carts_data:
             cart_id,
             customer_name,
             customer_email,
-            "",  # DDD separado (removido porque vamos usar o formatado)
-            telefone_cru,
-            telefone_formatado,
+            "",  # DDD separado (não usado mais)
+            telefone_cru or "Não encontrado",
+            telefone_formatado or "Não encontrado",
             product_name,
             quantity,
             total
