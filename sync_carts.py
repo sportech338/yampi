@@ -9,7 +9,7 @@ ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 
-# URL da API
+# URL da API (sem /export!)
 URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 
 headers = {
@@ -47,17 +47,17 @@ for cart in carts_data:
         print("\nDEBUG - Carrinho recebido da API:", cart)  # Debug
 
         cart_id = cart.get("id")
-        
+
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
-        
-        # Pegando informações do telefone
+
+        # Extraindo telefone corretamente
         phone_data = tracking.get("phone", {})
-        phone_area_code = phone_data.get("area_code", "Não informado")
-        phone_number = phone_data.get("number", "Sem número")
-        phone_formated = phone_data.get("formated_number", "Não disponível")
-        
+        phone_area_code = phone_data.get("area_code", "N/A")
+        phone_number = phone_data.get("number", "N/A")
+        phone_formatted = phone_data.get("formated_number", "N/A")
+
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -74,9 +74,9 @@ for cart in carts_data:
             cart_id,
             customer_name,
             customer_email,
-            phone_area_code,
-            phone_number,
-            phone_formated,
+            phone_area_code,  # Código de área (DDD)
+            phone_number,  # Número do telefone
+            phone_formatted,  # Número formatado com DDD
             product_name,
             quantity,
             total
