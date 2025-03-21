@@ -81,8 +81,9 @@ ontem_sp = hoje_sp - timedelta(days=1)
 for cart in carts_data:
     try:
         # Verifica se é do dia anterior com base no updated_at
-        updated_at_str = cart.get("updated_at")
-        if not updated_at_str:
+        updated_at_raw = cart.get("updated_at", {})
+updated_at_str = updated_at_raw.get("date")
+if not updated_at_str:
             continue
 
         updated_at_utc = datetime.strptime(updated_at_str, "%Y-%m-%dT%H:%M:%S.%fZ")
