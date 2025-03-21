@@ -47,8 +47,13 @@ for cart in carts_data:
     try:
         customer_name = cart.get('tracking_data', {}).get('name', 'Desconhecido')
         customer_email = cart.get('tracking_data', {}).get('email', 'Sem email')
-        items = cart.get('items', [])
-        product_name = items[0]['sku']['data']['title'] if items else 'Sem produto'
+
+        items = cart.get('items')
+        if isinstance(items, list) and len(items) > 0:
+            product_name = items[0].get('sku', {}).get('data', {}).get('title', 'Sem título')
+        else:
+            product_name = 'Sem produto'
+
         total = cart.get('totalizers', {}).get('total', 0)
 
         sheet.append_row([customer_name, customer_email, product_name, total])
