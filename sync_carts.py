@@ -4,6 +4,8 @@ from google.oauth2.service_account import Credentials
 import os
 import json
 import re
+from datetime import datetime, timedelta
+import pytz
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -70,14 +72,32 @@ def formatar_telefone(numero):
 # Domínio correto do checkout funcional
 dominio_loja = "seguro.lojasportech.com"
 
+# Timezone São Paulo
+tz_sp = pytz.timezone("America/Sao_Paulo")
+hoje_sp = datetime.now(tz_sp).date()
+ontem_sp = hoje_sp - timedelta(days=1)
+
 # Loop dos carrinhos
 for cart in carts_data:
     try:
-        # DEBUG
+        # Verifica se é do dia anterior com base no updated_at
+        updated_at_str = cart.get("updated_at")
+        if not updated_at_str:
+            continue
+
+        updated_at_utc = datetime.strptime(updated_at_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+        updated_at_sp = updated_at_utc.replace(tzinfo=pytz.utc).astimezone(tz_sp)
+        data_cart = updated_at_sp.date()
+
+        if data_cart != ontem_sp:
+            continue  # pula carrinhos fora da data desejada
+
+        # Informações básicas
         cart_id = cart.get("id")
         token = cart.get("token", "")
         print(f"\n🛒 CARRINHO ID: {cart_id}")
         print(f"🔐 TOKEN: {token}")
+        print(f"🕒 Atualizado em: {updated_at_sp.strftime('%d/%m/%Y %H:%M:%S')}")
         print(f"🔗 LINK GERADO: https://{dominio_loja}/cart?cart_token={token}")
         print("📦 CONTEÚDO DO CARRINHO:")
         print(json.dumps(cart, indent=2, ensure_ascii=False)[:2000])
@@ -106,12 +126,9 @@ for cart in carts_data:
         total = cart.get("totalizers", {}).get("total", 0)
 
         # Link funcional do checkout
-        if token:
-            link_checkout = f"https://{dominio_loja}/cart?cart_token={token}"
-        else:
-            link_checkout = "Não encontrado"
+        link_checkout = f"https://{dominio_loja}/cart?cart_token={token}" if token else "Não encontrado"
 
-        # Envia para o Google Sheets (sem a coluna "NÚMERO")
+        # Envia para o Google Sheets
         sheet.append_row([
             cart_id,
             customer_name,
