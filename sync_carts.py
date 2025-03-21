@@ -17,10 +17,10 @@ tz_sp = pytz.timezone("America/Sao_Paulo")
 hoje_sp = datetime.now(tz_sp).date()
 ontem_sp = hoje_sp - timedelta(days=1)
 data_inicio = ontem_sp.strftime("%Y-%m-%d")
-data_fim = data_inicio  # mesmo dia
+data_fim = data_inicio
 
-# URL correta com filtro por data
-URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts/export?date_from={data_inicio}&date_to={data_fim}"
+# URL base para paginação
+URL_BASE = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts/export"
 
 headers = {
     "User-token": TOKEN,
@@ -28,16 +28,27 @@ headers = {
     "Accept": "application/json"
 }
 
-# Requisição para a Yampi (endpoint de exportação)
-response = requests.get(URL, headers=headers)
+# Paginação
+pagina = 1
+carts_data = []
 
-if response.status_code == 200:
-    carts_data = response.json().get("data", [])
-    print(f"✅ Carrinhos encontrados no dia {data_inicio}: {len(carts_data)}")
-else:
-    print("❌ Erro ao buscar carrinhos:", response.status_code)
-    print(response.text)
-    carts_data = []
+while True:
+    url = f"{URL_BASE}?date_from={data_inicio}&date_to={data_fim}&per_page=100&page={pagina}"
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code == 200:
+        page_data = response.json().get("data", [])
+        if not page_data:
+            break  # Fim da paginação
+        carts_data.extend(page_data)
+        print(f"📄 Página {pagina} carregada: {len(page_data)} carrinhos.")
+        pagina += 1
+    else:
+        print(f"❌ Erro ao buscar carrinhos na página {pagina}: {response.status_code}")
+        print(response.text)
+        break
+
+print(f"✅ Total de carrinhos carregados: {len(carts_data)}")
 
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -92,7 +103,7 @@ except Exception as e:
     print("⚠️ Não foi possível verificar carrinhos existentes. Continuando sem filtro de duplicatas.")
     ids_existentes = set()
 
-# Loop dos carrinhos
+# Processa os carrinhos
 for cart in carts_data:
     try:
         cart_id = cart.get("id")
