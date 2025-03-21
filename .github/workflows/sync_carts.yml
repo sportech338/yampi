@@ -1,0 +1,35 @@
+name: Sync Carts from Yampi to Google Sheets
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Executa todos os dias às 2h da manhã (UTC)
+  workflow_dispatch:  # Permite rodar manualmente pelo GitHub Actions
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Criar credenciais do Google Sheets
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        run: |
+          echo "$GOOGLE_APPLICATION_CREDENTIALS" > creds.json
+          export GOOGLE_APPLICATION_CREDENTIALS=creds.json
+
+      - name: Rodar o script de sincronização
+        env:
+          YAMPI_API_TOKEN: ${{ secrets.YAMPI_API_TOKEN }}
+          GOOGLE_APPLICATION_CREDENTIALS: creds.json
+        run: python sync_carts.py
