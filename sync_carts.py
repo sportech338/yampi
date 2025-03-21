@@ -3,6 +3,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import os
 import json
+import re
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -29,12 +30,6 @@ else:
     print(response.text)
     carts_data = []
 
-# Salvar o JSON da API para debug
-with open("debug.json", "w", encoding="utf-8") as f:
-    json.dump(carts_data, f, indent=4, ensure_ascii=False)
-
-print("Arquivo debug.json salvo com sucesso.")
-
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -47,6 +42,23 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
+# Auxiliar: extrai número de telefone de string
+def extrair_telefone(texto):
+    match = re.search(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
+    if match:
+        return match.group()
+    return ""
+
+# Auxiliar: formata número no padrão brasileiro
+def formatar_telefone(numero):
+    digitos = re.sub(r'\D', '', numero)  # remove tudo que não for número
+    if len(digitos) == 10:
+        return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
+    elif len(digitos) == 11:
+        return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
+    else:
+        return numero  # retorna do jeito que veio se não bater o padrão
+
 # Inserir os dados
 for cart in carts_data:
     try:
@@ -55,25 +67,47 @@ for cart in carts_data:
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # Tenta obter o telefone a partir das várias fontes possíveis
+        # Tentando puxar telefone de várias fontes
         phone_area_code = ""
         phone_number = ""
         phone_formatted = ""
 
         phone_data = tracking.get("phone")
+
+        # Caso seja objeto
         if isinstance(phone_data, dict):
             phone_area_code = phone_data.get("area_code", "")
             phone_number = phone_data.get("number", "")
             phone_formatted = phone_data.get("formated_number", "")
+        # Caso seja string simples
         elif isinstance(phone_data, str):
             phone_number = phone_data
             phone_formatted = phone_data
 
-        # Se ainda não tem telefone, tenta pegar de customer_phone direto
+        # tracking_data.customer_phone
         if not phone_number:
-            customer_phone = cart.get("customer_phone", "")
-            phone_number = customer_phone
-            phone_formatted = customer_phone
+            tracking_phone = tracking.get("customer_phone")
+            if isinstance(tracking_phone, str):
+                phone_number = tracking_phone
+                phone_formatted = tracking_phone
+
+        # cart.customer_phone
+        if not phone_number:
+            customer_phone = cart.get("customer_phone")
+            if isinstance(customer_phone, str):
+                phone_number = customer_phone
+                phone_formatted = customer_phone
+
+        # Última tentativa: buscar qualquer número dentro de tracking_data como string
+        if not phone_number:
+            tracking_json_str = json.dumps(tracking)
+            telefone_extraido = extrair_telefone(tracking_json_str)
+            if telefone_extraido:
+                phone_number = telefone_extraido
+                phone_formatted = telefone_extraido
+
+        # Aplica formatação final
+        phone_formatted = formatar_telefone(phone_formatted)
 
         # Produto
         items_data = cart.get("items", {}).get("data", [])
