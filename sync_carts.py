@@ -51,7 +51,7 @@ step_map = {
 # Inserir os dados
 for cart in carts_data:
     try:
-        print("\nDEBUG - Carrinho recebido da API:", cart)  # Debug
+        print("\nDEBUG - Carrinho recebido da API:", json.dumps(cart, indent=4))  # Debug para analisar a estrutura exata
 
         cart_id = cart.get("id")
 
@@ -59,7 +59,10 @@ for cart in carts_data:
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # Extraindo telefone corretamente de dois lugares possíveis
+        # Depuração do telefone
+        print(f"\nDEBUG - Dados de telefone do carrinho {cart_id}: {tracking.get('phone', 'N/A')}")
+
+        # Extraindo telefone corretamente
         phone_data = tracking.get("phone", {})
         phone_area_code = phone_data.get("area_code", "N/A")
         phone_number = phone_data.get("number", "N/A")
