@@ -42,18 +42,15 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Função: extrair CPF do texto
+# Funções auxiliares
 def extrair_cpf(texto):
-    # Captura padrões de CPF com ou sem pontos/traço
     match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
     if match:
-        # Formatar: 12345678900 → 123.456.789-00
         cpf = re.sub(r'\D', '', match.group())
         if len(cpf) == 11:
             return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
     return "Não encontrado"
 
-# Função: extrair telefone para manter no formato anterior
 def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
@@ -70,6 +67,9 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
+# Domínio correto para o checkout abandonado
+dominio_loja = "seguro.lojasportech.com"
+
 # Loop dos carrinhos
 for cart in carts_data:
     try:
@@ -78,13 +78,22 @@ for cart in carts_data:
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # Busca CPF no carrinho inteiro
+        # Texto completo do carrinho para busca de CPF e telefone
         cart_json_str = json.dumps(cart)
+
+        # CPF
         cpf = extrair_cpf(cart_json_str)
 
-        # Busca telefone como antes
+        # Telefone
         telefone_cru = extrair_telefone(cart_json_str)
         telefone_formatado = formatar_telefone(telefone_cru)
+
+        # Link do checkout abandonado
+        token = cart.get("token", "")
+        if token:
+            link_checkout = f"https://{dominio_loja}/checkout/token/{token}"
+        else:
+            link_checkout = "Não encontrado"
 
         # Produto
         items_data = cart.get("items", {}).get("data", [])
@@ -100,15 +109,16 @@ for cart in carts_data:
 
         # Envia para o Google Sheets
         sheet.append_row([
-            cart_id,            # CARRINHO
-            customer_name,      # NOME DO CLIENTE
-            customer_email,     # EMAIL
-            cpf,                # CPF (substitui a coluna NÚMERO DE TELEFONE)
-            telefone_cru or "Não encontrado",
-            telefone_formatado or "Não encontrado",
-            product_name,
-            quantity,
-            total
+            cart_id,                            # CARRINHO
+            customer_name,                      # NOME DO CLIENTE
+            customer_email,                     # EMAIL
+            cpf,                                # CPF
+            telefone_cru or "Não encontrado",   # NÚMERO
+            telefone_formatado or "Não encontrado",  # FORMATO
+            link_checkout,                      # LINK DO CHECKOUT
+            product_name,                       # PRODUTO
+            quantity,                           # QTD
+            total                               # VALOR
         ])
 
         print(f"Carrinho {cart_id} adicionado com sucesso.")
