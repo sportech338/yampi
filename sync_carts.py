@@ -45,12 +45,15 @@ sheet = spreadsheet.sheet1
 # Inserir os dados dos carrinhos abandonados
 for cart in carts_data:
     try:
-        customer_name = cart['tracking_data']['name']
-        customer_email = cart['tracking_data']['email']
-        product_name = cart['items'][0]['sku']['data']['title']
-        total = cart['totalizers']['total']
-        
+        customer_name = cart.get('tracking_data', {}).get('name', 'Desconhecido')
+        customer_email = cart.get('tracking_data', {}).get('email', 'Sem email')
+        items = cart.get('items', [])
+        product_name = items[0]['sku']['data']['title'] if items else 'Sem produto'
+        total = cart.get('totalizers', {}).get('total', 0)
+
         sheet.append_row([customer_name, customer_email, product_name, total])
         print(f"Carrinho de {customer_name} adicionado com sucesso.")
     except Exception as e:
-        print("Erro ao processar um carrinho:", e)
+        import traceback
+        print("Erro ao processar um carrinho:")
+        traceback.print_exc()
