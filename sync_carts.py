@@ -41,15 +41,24 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
+# Mapeamento das etapas do abandono
+step_map = {
+    1: "Dados cadastrais",
+    2: "Entrega",
+    3: "Pagamento"
+}
+
 # Inserir os dados
 for cart in carts_data:
     try:
+        print("\nDEBUG - Carrinho recebido da API:", cart)  # Debug
+
         cart_id = cart.get("id")
 
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
-        customer_phone = tracking.get("phone", "Sem telefone")
+        customer_phone = tracking.get("phone", "Sem telefone")  # Pegando telefone corretamente
 
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
@@ -62,16 +71,11 @@ for cart in carts_data:
 
         total = cart.get("totalizers", {}).get("total", 0)
 
-        # Descobrir a etapa do abandono
-        checkout_step = cart.get("checkout_step", "Desconhecido")
-
-        # Mapeamento das etapas
-        step_map = {
-            1: "Dados cadastrais",
-            2: "Entrega",
-            3: "Pagamento"
-        }
+        # Momento do abandono
+        checkout_step = cart.get("checkout_step")  # Verificar se está vindo como int
         abandoned_at = step_map.get(checkout_step, "Desconhecido")
+        
+        print(f"DEBUG - Etapa de abandono: {checkout_step} -> {abandoned_at}")  # Debug
 
         # Adiciona os dados na planilha
         sheet.append_row([
