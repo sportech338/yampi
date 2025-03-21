@@ -8,12 +8,12 @@ import os
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"  # Substitua pelo alias da sua loja
-TOKEN = os.getenv("YAMPI_API_TOKEN")
-print(f"Token Yampi: {TOKEN}")
-SHEET_ID = "1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E"
+TOKEN = os.getenv("YAMPI_API_TOKEN")  # Token da Yampi vindo dos secrets
+SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")  # Chave secreta da Yampi vinda dos secrets
+SHEET_ID = "1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E"  # ID da sua planilha do Google Sheets
+
 # URL da API (endpoint correto para exportação de carrinhos abandonados)
 URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts/export"
-
 
 # Filtrar dados das últimas 24h
 tz_brasil = pytz.timezone("America/Sao_Paulo")
@@ -29,18 +29,22 @@ params = {
     "end_date": data_fim
 }
 
+# Definindo os cabeçalhos corretos para autenticação
 headers = {
-    "Authorization": f"Bearer {TOKEN}",
+    "User-token": TOKEN,           # Token da Yampi
+    "User-Secret-Key": SECRET_KEY, # Chave secreta da Yampi
     "Accept": "application/json"
 }
 
+# Realizando a requisição para a API Yampi
 response = requests.get(URL, headers=headers, params=params)
 
+# Se a resposta for bem-sucedida (status 200)
 if response.status_code == 200:
     carts_data = response.json().get("data", [])
     rows = []
     for cart in carts_data:
-        rows.append([
+        rows.append([ 
             cart.get("id", ""),
             cart.get("token", ""),
             cart["totalizers"].get("total", ""),
@@ -48,16 +52,20 @@ if response.status_code == 200:
             cart["totalizers"].get("total_items", ""),
             cart.get("utm_source", "Não informado"),
             cart.get("utm_campaign", "Não informado"),
-            data_inicio
+            data_inicio  # Data do carrinho
         ])
 
-    # Google Sheets
+    # Google Sheets - Carregar credenciais e autorizar
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    creds_dict = json.loads(CREDENTIALS_JSON)
+
+    with open(CREDENTIALS_JSON, 'r') as f:
+        creds_dict = json.load(f)
+
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
 
+    # Abrindo a planilha e adicionando os dados
     sheet = client.open_by_key(SHEET_ID).sheet1
 
     for row in rows:
