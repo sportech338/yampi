@@ -21,16 +21,9 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
-      - name: Criar credenciais do Google Sheets
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-        run: |
-          echo "$GOOGLE_APPLICATION_CREDENTIALS" > creds.json
-          export GOOGLE_APPLICATION_CREDENTIALS=creds.json
-
       - name: Rodar o script de sincronização
         env:
           YAMPI_API_TOKEN: ${{ secrets.YAMPI_API_TOKEN }}
           YAMPI_SECRET_KEY: ${{ secrets.YAMPI_SECRET_KEY }}
-          GOOGLE_APPLICATION_CREDENTIALS: creds.json
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
         run: python sync_carts.py
