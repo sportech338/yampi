@@ -67,35 +67,33 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Domínio correto para o checkout abandonado
+# Domínio do checkout
 dominio_loja = "seguro.lojasportech.com"
 
 # Loop dos carrinhos
 for cart in carts_data:
     try:
+        # 1. CARRINHO
         cart_id = cart.get("id")
+
+        # 2. NOME DO CLIENTE
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
+
+        # 3. EMAIL
         customer_email = tracking.get("email", "Sem email")
 
-        # Texto completo do carrinho para busca de CPF e telefone
+        # 4. CPF
         cart_json_str = json.dumps(cart)
-
-        # CPF
         cpf = extrair_cpf(cart_json_str)
 
-        # Telefone
+        # 5. NÚMERO (telefone cru)
         telefone_cru = extrair_telefone(cart_json_str)
+
+        # 6. FORMATO DO NÚMERO
         telefone_formatado = formatar_telefone(telefone_cru)
 
-        # Link do checkout abandonado
-        token = cart.get("token", "")
-        if token:
-            link_checkout = f"https://{dominio_loja}/checkout/token/{token}"
-        else:
-            link_checkout = "Não encontrado"
-
-        # Produto
+        # 7. NOME DO PRODUTO
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -105,20 +103,31 @@ for cart in carts_data:
             product_name = "Sem produto"
             quantity = 0
 
+        # 8. QUANTIDADE
+        # já capturado acima
+
+        # 9. VALOR TOTAL
         total = cart.get("totalizers", {}).get("total", 0)
 
-        # Envia para o Google Sheets
+        # 10. LINK CHECKOUT
+        token = cart.get("token", "")
+        if token:
+            link_checkout = f"https://{dominio_loja}/checkout/token/{token}"
+        else:
+            link_checkout = "Não encontrado"
+
+        # Envia os dados na ordem correta
         sheet.append_row([
             cart_id,                            # CARRINHO
             customer_name,                      # NOME DO CLIENTE
             customer_email,                     # EMAIL
             cpf,                                # CPF
             telefone_cru or "Não encontrado",   # NÚMERO
-            telefone_formatado or "Não encontrado",  # FORMATO
-            link_checkout,                      # LINK DO CHECKOUT
-            product_name,                       # PRODUTO
-            quantity,                           # QTD
-            total                               # VALOR
+            telefone_formatado or "Não encontrado",  # FORMATO DO NÚMERO
+            product_name,                       # NOME DO PRODUTO
+            quantity,                           # QUANTIDADE
+            total,                              # VALOR TOTAL
+            link_checkout                       # LINK CHECKOUT
         ])
 
         print(f"Carrinho {cart_id} adicionado com sucesso.")
