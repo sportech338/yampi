@@ -80,30 +80,33 @@ ontem_fim = ontem_inicio + timedelta(days=1)
 # Lista para armazenar carrinhos do dia anterior
 carrinhos_ontem = []
 
-# Filtra apenas os carrinhos abandonados ontem
+# Filtra carrinhos abandonados ou modificados ontem
 for cart in carts_data:
-    abandoned_at_str = cart.get("abandoned_at")
-    if not abandoned_at_str:
-        continue
+    abandoned_str = cart.get("abandoned_at")
+    updated_str = cart.get("updated_at")
 
     try:
-        abandoned_at = datetime.fromisoformat(abandoned_at_str.replace("Z", "+00:00"))
+        abandoned_at = datetime.fromisoformat(abandoned_str.replace("Z", "+00:00")) if abandoned_str else None
+        updated_at = datetime.fromisoformat(updated_str.replace("Z", "+00:00")) if updated_str else None
     except Exception:
         continue
 
-    if ontem_inicio <= abandoned_at < ontem_fim:
-        carrinhos_ontem.append((cart, abandoned_at))
+    if (
+        (abandoned_at and ontem_inicio <= abandoned_at < ontem_fim)
+        or (updated_at and ontem_inicio <= updated_at < ontem_fim)
+    ):
+        carrinhos_ontem.append((cart, abandoned_at or updated_at))
 
 # LOG elegante
-print(f"\n📅 Carrinhos abandonados em {ontem_inicio.date()}: {len(carrinhos_ontem)}")
+print(f"\n📅 Carrinhos abandonados ou modificados em {ontem_inicio.date()}: {len(carrinhos_ontem)}")
 
 if len(carrinhos_ontem) == 0:
-    print("ℹ️ Nenhum carrinho abandonado encontrado ontem. Nada será enviado para a planilha.")
+    print("ℹ️ Nenhum carrinho abandonado ou modificado encontrado ontem. Nada será enviado para a planilha.")
 else:
     print("🚀 Enviando carrinhos para a planilha...\n")
 
 # Loop dos carrinhos filtrados
-for cart, abandoned_at in carrinhos_ontem:
+for cart, data_ref in carrinhos_ontem:
     try:
         cart_id = cart.get("id")
         token = cart.get("token", "")
@@ -145,7 +148,7 @@ for cart, abandoned_at in carrinhos_ontem:
             link_checkout
         ])
 
-        print(f"✅ Carrinho {cart_id} (abandonado às {abandoned_at.strftime('%H:%M')}) adicionado com sucesso.")
+        print(f"✅ Carrinho {cart_id} (última modificação às {data_ref.strftime('%H:%M')}) adicionado com sucesso.")
 
     except Exception as e:
         import traceback
