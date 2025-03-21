@@ -67,40 +67,33 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Domínio correto da loja para o link de checkout funcional
-dominio_loja = "www.lojasportech.com"
+# Domínio final correto da loja para o link de recuperação
+dominio_loja = "seguro.lojasportech.com"
 
 # Loop dos carrinhos
 for cart in carts_data:
     try:
-        # DEBUG: mostrar token e link
+        # DEBUG
         cart_id = cart.get("id")
         token = cart.get("token", "")
-
         print(f"\n🛒 CARRINHO ID: {cart_id}")
         print(f"🔐 TOKEN: {token}")
-        print(f"🔗 LINK GERADO: https://{dominio_loja}/checkout/review/{token}")
-        print("📦 CONTEÚDO DO CARRINHO (RESUMO):")
-        print(json.dumps(cart, indent=2, ensure_ascii=False)[:2000])  # até 2000 caracteres
+        print(f"🔗 LINK GERADO: https://{dominio_loja}/cart?cart_token={token}")
+        print("📦 CONTEÚDO DO CARRINHO:")
+        print(json.dumps(cart, indent=2, ensure_ascii=False)[:2000])
 
-        # 2. NOME DO CLIENTE
+        # Nome e email
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
-
-        # 3. EMAIL
         customer_email = tracking.get("email", "Sem email")
 
-        # 4. CPF
+        # CPF e telefone
         cart_json_str = json.dumps(cart)
         cpf = extrair_cpf(cart_json_str)
-
-        # 5. NÚMERO (telefone cru)
         telefone_cru = extrair_telefone(cart_json_str)
-
-        # 6. FORMATO DO NÚMERO
         telefone_formatado = formatar_telefone(telefone_cru)
 
-        # 7. NOME DO PRODUTO
+        # Produto
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -110,16 +103,15 @@ for cart in carts_data:
             product_name = "Sem produto"
             quantity = 0
 
-        # 8. VALOR TOTAL
         total = cart.get("totalizers", {}).get("total", 0)
 
-        # 9. LINK CHECKOUT funcional
+        # Link funcional de recuperação de carrinho
         if token:
-            link_checkout = f"https://{dominio_loja}/checkout/review/{token}"
+            link_checkout = f"https://{dominio_loja}/cart?cart_token={token}"
         else:
             link_checkout = "Não encontrado"
 
-        # Envia para o Google Sheets na ordem certa
+        # Envia para o Google Sheets
         sheet.append_row([
             cart_id,
             customer_name,
