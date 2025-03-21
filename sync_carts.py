@@ -67,8 +67,8 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Domínio do checkout seguro
-dominio_loja = "seguro.lojasportech.com"
+# Domínio correto da loja para link funcional de checkout abandonado
+dominio_loja = "www.lojasportech.com"
 
 # Loop dos carrinhos
 for cart in carts_data:
@@ -106,14 +106,14 @@ for cart in carts_data:
         # 8. VALOR TOTAL
         total = cart.get("totalizers", {}).get("total", 0)
 
-        # 9. LINK CHECKOUT (agora no caminho correto: /checkout/review/{token})
+        # 9. LINK CHECKOUT funcional
         token = cart.get("token", "")
         if token:
             link_checkout = f"https://{dominio_loja}/checkout/review/{token}"
         else:
             link_checkout = "Não encontrado"
 
-        # Envia para o Google Sheets com a ordem certa
+        # Envia para o Google Sheets
         sheet.append_row([
             cart_id,                            # CARRINHO
             customer_name,                      # NOME DO CLIENTE
@@ -124,7 +124,7 @@ for cart in carts_data:
             product_name,                       # NOME DO PRODUTO
             quantity,                           # QUANTIDADE
             total,                              # VALOR TOTAL
-            link_checkout                       # LINK CHECKOUT
+            link_checkout                       # LINK CHECKOUT FUNCIONAL
         ])
 
         print(f"Carrinho {cart_id} adicionado com sucesso.")
