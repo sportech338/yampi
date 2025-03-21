@@ -4,23 +4,14 @@ from google.oauth2.service_account import Credentials
 import os
 import json
 import re
-from datetime import datetime, timedelta
-import pytz
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 
-# Timezone São Paulo
-tz_sp = pytz.timezone("America/Sao_Paulo")
-hoje_sp = datetime.now(tz_sp).date()
-ontem_sp = hoje_sp - timedelta(days=1)
-data_inicio = ontem_sp.strftime("%Y-%m-%d")
-data_fim = data_inicio
-
-# URL base para paginação
-URL_BASE = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts/export"
+# URL da API
+URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 
 headers = {
     "User-token": TOKEN,
@@ -28,27 +19,16 @@ headers = {
     "Accept": "application/json"
 }
 
-# Paginação
-pagina = 1
-carts_data = []
+# Requisição para a Yampi
+response = requests.get(URL, headers=headers)
 
-while True:
-    url = f"{URL_BASE}?date_from={data_inicio}&date_to={data_fim}&per_page=100&page={pagina}"
-    response = requests.get(url, headers=headers)
-    
-    if response.status_code == 200:
-        page_data = response.json().get("data", [])
-        if not page_data:
-            break  # Fim da paginação
-        carts_data.extend(page_data)
-        print(f"📄 Página {pagina} carregada: {len(page_data)} carrinhos.")
-        pagina += 1
-    else:
-        print(f"❌ Erro ao buscar carrinhos na página {pagina}: {response.status_code}")
-        print(response.text)
-        break
-
-print(f"✅ Total de carrinhos carregados: {len(carts_data)}")
+if response.status_code == 200:
+    carts_data = response.json().get("data", [])
+    print(f"Carrinhos abandonados encontrados: {len(carts_data)}")
+else:
+    print("Erro ao buscar carrinhos:", response.status_code)
+    print(response.text)
+    carts_data = []
 
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -90,53 +70,30 @@ def formatar_telefone(numero):
 # Domínio correto do checkout funcional
 dominio_loja = "seguro.lojasportech.com"
 
-# Verifica carrinhos já na planilha
-print("🔍 Buscando carrinhos já existentes na planilha para evitar duplicações...")
-try:
-    ids_existentes = set()
-    valores = sheet.get_all_values()
-    for row in valores[1:]:  # pula cabeçalho
-        if row and row[0].isdigit():
-            ids_existentes.add(int(row[0]))
-    print(f"🔒 {len(ids_existentes)} carrinhos já estão na planilha.")
-except Exception as e:
-    print("⚠️ Não foi possível verificar carrinhos existentes. Continuando sem filtro de duplicatas.")
-    ids_existentes = set()
-
-# Processa os carrinhos
+# Loop dos carrinhos
 for cart in carts_data:
     try:
+        # DEBUG
         cart_id = cart.get("id")
-        if cart_id in ids_existentes:
-            print(f"⏩ Carrinho {cart_id} já está na planilha. Pulando.")
-            continue
-
-        updated_at_str = cart.get("updated_at", {}).get("date")
-        if not updated_at_str:
-            continue
-
-        try:
-            updated_at_sp = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S.%f")
-        except ValueError:
-            updated_at_sp = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S")
-
         token = cart.get("token", "")
         print(f"\n🛒 CARRINHO ID: {cart_id}")
         print(f"🔐 TOKEN: {token}")
-        print(f"🕒 Atualizado em: {updated_at_sp.strftime('%d/%m/%Y %H:%M:%S')}")
         print(f"🔗 LINK GERADO: https://{dominio_loja}/cart?cart_token={token}")
         print("📦 CONTEÚDO DO CARRINHO:")
         print(json.dumps(cart, indent=2, ensure_ascii=False)[:2000])
 
+        # Nome e email
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
+        # CPF e telefone
         cart_json_str = json.dumps(cart)
         cpf = extrair_cpf(cart_json_str)
         telefone = extrair_telefone(cart_json_str)
         telefone_formatado = formatar_telefone(telefone)
 
+        # Produto
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -147,8 +104,14 @@ for cart in carts_data:
             quantity = 0
 
         total = cart.get("totalizers", {}).get("total", 0)
-        link_checkout = f"https://{dominio_loja}/cart?cart_token={token}" if token else "Não encontrado"
 
+        # Link funcional do checkout
+        if token:
+            link_checkout = f"https://{dominio_loja}/cart?cart_token={token}"
+        else:
+            link_checkout = "Não encontrado"
+
+        # Envia para o Google Sheets (sem a coluna "NÚMERO")
         sheet.append_row([
             cart_id,
             customer_name,
@@ -158,8 +121,7 @@ for cart in carts_data:
             product_name,
             quantity,
             total,
-            link_checkout,
-            updated_at_sp.strftime("%d/%m/%Y %H:%M:%S")
+            link_checkout
         ])
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
