@@ -11,26 +11,16 @@ import pytz
 ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
+DOMINIO_LOJA = "seguro.lojasportech.com"
 
-# URL da API
-URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
+# URL base da API com paginação
+BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 
 headers = {
     "User-token": TOKEN,
     "User-Secret-Key": SECRET_KEY,
     "Accept": "application/json"
 }
-
-# Requisição para a Yampi
-response = requests.get(URL, headers=headers)
-
-if response.status_code == 200:
-    carts_data = response.json().get("data", [])
-    print(f"📦 Total de carrinhos retornados pela Yampi: {len(carts_data)}")
-else:
-    print("❌ Erro ao buscar carrinhos:", response.status_code)
-    print(response.text)
-    carts_data = []
 
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -69,27 +59,40 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Domínio do checkout
-dominio_loja = "seguro.lojasportech.com"
-
-# Fuso horário do Brasil
+# Fuso horário
 fuso_sp = pytz.timezone("America/Sao_Paulo")
-
-# Intervalo de ontem no fuso de São Paulo
 agora_sp = datetime.now(fuso_sp)
 ontem_sp_inicio = (agora_sp - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 ontem_sp_fim = ontem_sp_inicio + timedelta(days=1)
-
-# Converte os limites de São Paulo para UTC
 ontem_inicio_utc = ontem_sp_inicio.astimezone(pytz.UTC)
 ontem_fim_utc = ontem_sp_fim.astimezone(pytz.UTC)
 
-# Lista dos carrinhos válidos
+# Coleta todas as páginas da API
+print("📥 Buscando carrinhos da Yampi com paginação...")
+todos_carrinhos = []
+pagina = 1
+
+while True:
+    response = requests.get(f"{BASE_URL}?page={pagina}", headers=headers)
+    if response.status_code != 200:
+        print(f"❌ Erro na página {pagina}: {response.status_code}")
+        break
+
+    data = response.json().get("data", [])
+    if not data:
+        break  # fim das páginas
+
+    todos_carrinhos.extend(data)
+    print(f"📄 Página {pagina} carregada: {len(data)} carrinhos.")
+    pagina += 1
+
+print(f"\n📦 Total de carrinhos retornados pela Yampi: {len(todos_carrinhos)}")
+
+# Filtra carrinhos abandonados ou modificados ontem
 carrinhos_filtrados = []
 
 print("\n📋 DEBUG DAS DATAS DOS CARRINHOS:")
-
-for cart in carts_data:
+for cart in todos_carrinhos:
     cart_id = cart.get("id")
     abandoned_str = cart.get("abandoned_at")
     updated_raw = cart.get("updated_at")
@@ -104,18 +107,19 @@ for cart in carts_data:
     data_ref = None
 
     try:
+        # abandoned_at (ISO string UTC)
         if abandoned_str:
             abandoned_at = datetime.fromisoformat(abandoned_str.replace("Z", "+00:00"))
             if ontem_inicio_utc <= abandoned_at < ontem_fim_utc:
                 motivo = "abandonado"
                 data_ref = abandoned_at
 
+        # updated_at (dict com date + timezone)
         if isinstance(updated_raw, dict) and "date" in updated_raw and not data_ref:
             updated_str = updated_raw["date"]
             updated_naive = datetime.strptime(updated_str, "%Y-%m-%d %H:%M:%S.%f")
             updated_local = fuso_sp.localize(updated_naive)
             updated_at = updated_local.astimezone(pytz.UTC)
-
             if ontem_inicio_utc <= updated_at < ontem_fim_utc:
                 motivo = "modificado"
                 data_ref = updated_at
@@ -126,15 +130,15 @@ for cart in carts_data:
     except Exception as e:
         print(f"  ⚠️ Erro ao processar datas do carrinho {cart_id}: {e}")
 
-# LOG final
+# Log final
 print(f"\n📅 Carrinhos abandonados ou modificados em {ontem_sp_inicio.date()} (horário de São Paulo): {len(carrinhos_filtrados)}")
 
-if len(carrinhos_filtrados) == 0:
+if not carrinhos_filtrados:
     print("ℹ️ Nenhum carrinho será enviado para a planilha.")
 else:
     print("🚀 Enviando carrinhos para a planilha...\n")
 
-# Envia para o Google Sheets
+# Envia para a planilha
 for cart, data_ref, motivo in carrinhos_filtrados:
     try:
         cart_id = cart.get("id")
@@ -159,8 +163,7 @@ for cart, data_ref, motivo in carrinhos_filtrados:
             quantity = 0
 
         total = cart.get("totalizers", {}).get("total", 0)
-
-        link_checkout = f"https://{dominio_loja}/cart?cart_token={token}" if token else "Não encontrado"
+        link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
         sheet.append_row([
             cart_id,
