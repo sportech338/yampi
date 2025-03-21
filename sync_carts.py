@@ -80,13 +80,18 @@ ontem_sp = hoje_sp - timedelta(days=1)
 # Loop dos carrinhos
 for cart in carts_data:
     try:
-        # Verifica se é do dia anterior com base no updated_at
         updated_at_raw = cart.get("updated_at", {})
         updated_at_str = updated_at_raw.get("date")
         if not updated_at_str:
             continue
 
-        updated_at_utc = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S.%f")
+        # Tenta fazer o parsing da data com ou sem milissegundos
+        try:
+            updated_at_utc = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S.%f")
+        except ValueError:
+            updated_at_utc = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S")
+
+        # Converte para horário de São Paulo
         updated_at_sp = updated_at_utc.replace(tzinfo=pytz.utc).astimezone(tz_sp)
         data_cart = updated_at_sp.date()
 
@@ -139,7 +144,8 @@ for cart in carts_data:
             product_name,
             quantity,
             total,
-            link_checkout
+            link_checkout,
+            updated_at_sp.strftime("%d/%m/%Y %H:%M:%S")  # Abandono convertido para horário de SP
         ])
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
