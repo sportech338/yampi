@@ -3,27 +3,22 @@ import gspread
 from google.oauth2.service_account import Credentials
 import os
 import json
-from datetime import datetime, timedelta
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 
-# 🗓️ Data de ontem no formato YYYY-MM-DD
-ontem = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+# URL da API (sem /export!)
+URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 
-# URL com filtro da data
-URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts?created_at_from={ontem}"
-
-# Cabeçalhos de autenticação
 headers = {
     "User-token": TOKEN,
     "User-Secret-Key": SECRET_KEY,
     "Accept": "application/json"
 }
 
-# Requisição à API da Yampi
+# Requisição para a Yampi
 response = requests.get(URL, headers=headers)
 
 if response.status_code == 200:
@@ -34,42 +29,65 @@ else:
     print(response.text)
     carts_data = []
 
-# Autenticar no Google Sheets
+# Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 credentials_dict = json.loads(creds_json)
 credentials = Credentials.from_service_account_info(credentials_dict, scopes=scope)
 client = gspread.authorize(credentials)
 
-# Conectar à planilha
+# Planilha
 SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Adicionar cabeçalho se a planilha estiver vazia
-if len(sheet.get_all_values()) == 0:
-    sheet.append_row(["ID", "Token", "Total", "UTM Source", "UTM Campaign", "Produto"])
-
-# Inserir os dados dos carrinhos abandonados
+# Inserir os dados
 for cart in carts_data:
     try:
         cart_id = cart.get("id")
-        token = cart.get("token")
-        total = cart.get("totalizers", {}).get("total", 0)
-        utm_source = cart.get("utm_source", "Não informado")
-        utm_campaign = cart.get("utm_campaign", "Não informado")
 
-        # Pegar nome do produto
+        tracking = cart.get("tracking_data", {})
+        customer_name = tracking.get("name", "Desconhecido")
+        customer_email = tracking.get("email", "Sem email")
+        customer_phone = tracking.get("phone", "Sem telefone")
+
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
-            product_name = items_data[0].get("sku", {}).get("data", {}).get("title", "Sem título")
+            first_item = items_data[0]
+            product_name = first_item.get("sku", {}).get("data", {}).get("title", "Sem título")
+            quantity = first_item.get("quantity", 1)
         else:
             product_name = "Sem produto"
+            quantity = 0
 
-        # Adicionar à planilha
-        sheet.append_row([cart_id, token, total, utm_source, utm_campaign, product_name])
+        total = cart.get("totalizers", {}).get("total", 0)
+
+        # Descobrir a etapa do abandono
+        checkout_step = cart.get("checkout_step", "Desconhecido")
+
+        # Mapeamento das etapas
+        step_map = {
+            1: "Dados cadastrais",
+            2: "Entrega",
+            3: "Pagamento"
+        }
+        abandoned_at = step_map.get(checkout_step, "Desconhecido")
+
+        # Adiciona os dados na planilha
+        sheet.append_row([
+            cart_id,
+            customer_name,
+            customer_phone,
+            customer_email,
+            product_name,
+            quantity,
+            total,
+            abandoned_at
+        ])
+
         print(f"Carrinho {cart_id} adicionado com sucesso.")
+
     except Exception as e:
         import traceback
-        print(f"Erro ao processar carrinho {cart.get('id', 'sem ID')}:")
+        print("Erro ao processar um carrinho:")
         traceback.print_exc()
