@@ -85,18 +85,19 @@ for cart in carts_data:
         if not updated_at_str:
             continue
 
-        # Tenta fazer o parsing da data com ou sem milissegundos
+        # Interpreta como se já estivesse em fuso horário de São Paulo
         try:
-            updated_at_utc = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S.%f")
+            updated_at_sp = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S.%f")
         except ValueError:
-            updated_at_utc = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S")
+            updated_at_sp = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S")
 
-        # Converte para horário de São Paulo
-        updated_at_sp = updated_at_utc.replace(tzinfo=pytz.utc).astimezone(tz_sp)
+        # Aplica fuso horário de São Paulo (sem conversão)
+        updated_at_sp = tz_sp.localize(updated_at_sp)
+
+        # Verifica se foi atualizado ontem (SP)
         data_cart = updated_at_sp.date()
-
         if data_cart != ontem_sp:
-            continue  # pula carrinhos fora da data desejada
+            continue
 
         # Informações básicas
         cart_id = cart.get("id")
@@ -145,7 +146,7 @@ for cart in carts_data:
             quantity,
             total,
             link_checkout,
-            updated_at_sp.strftime("%d/%m/%Y %H:%M:%S")  # Abandono convertido para horário de SP
+            updated_at_sp.strftime("%d/%m/%Y %H:%M:%S")  # Horário do abandono
         ])
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
