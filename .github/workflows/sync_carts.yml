@@ -28,15 +28,9 @@ jobs:
           echo "$GOOGLE_APPLICATION_CREDENTIALS" > creds.json
           export GOOGLE_APPLICATION_CREDENTIALS=creds.json
 
-      - name: Verificar se creds.json foi criado
-        run: cat creds.json  # Verifique se o arquivo de credenciais foi criado corretamente
-
       - name: Rodar o script de sincronização
         env:
           YAMPI_API_TOKEN: ${{ secrets.YAMPI_API_TOKEN }}
           YAMPI_SECRET_KEY: ${{ secrets.YAMPI_SECRET_KEY }}
           GOOGLE_APPLICATION_CREDENTIALS: creds.json
         run: python sync_carts.py
-
-      - name: Remover creds.json após execução (opcional)
-        run: rm creds.json
