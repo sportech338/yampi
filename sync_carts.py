@@ -29,6 +29,12 @@ else:
     print(response.text)
     carts_data = []
 
+# Salvar o JSON da API em um arquivo local para análise
+with open("debug.json", "w", encoding="utf-8") as f:
+    json.dump(carts_data, f, indent=4, ensure_ascii=False)
+
+print("Arquivo debug.json salvo com sucesso! Verifique o conteúdo para analisar os telefones.")
+
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
