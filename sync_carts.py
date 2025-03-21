@@ -26,9 +26,9 @@ response = requests.get(URL, headers=headers)
 
 if response.status_code == 200:
     carts_data = response.json().get("data", [])
-    print(f"Carrinhos abandonados encontrados: {len(carts_data)}")
+    print(f"📦 Total de carrinhos retornados pela Yampi: {len(carts_data)}")
 else:
-    print("Erro ao buscar carrinhos:", response.status_code)
+    print("❌ Erro ao buscar carrinhos:", response.status_code)
     print(response.text)
     carts_data = []
 
@@ -77,23 +77,34 @@ hoje_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
 ontem_inicio = (hoje_utc - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 ontem_fim = ontem_inicio + timedelta(days=1)
 
-# Loop dos carrinhos
+# Lista para armazenar carrinhos do dia anterior
+carrinhos_ontem = []
+
+# Filtra apenas os carrinhos abandonados ontem
 for cart in carts_data:
+    abandoned_at_str = cart.get("abandoned_at")
+    if not abandoned_at_str:
+        continue
+
     try:
-        # Verifica se foi abandonado ontem
-        abandoned_at_str = cart.get("abandoned_at")
-        if not abandoned_at_str:
-            continue
+        abandoned_at = datetime.fromisoformat(abandoned_at_str.replace("Z", "+00:00"))
+    except Exception:
+        continue
 
-        try:
-            abandoned_at = datetime.fromisoformat(abandoned_at_str.replace("Z", "+00:00"))
-        except Exception:
-            continue
+    if ontem_inicio <= abandoned_at < ontem_fim:
+        carrinhos_ontem.append((cart, abandoned_at))
 
-        if not (ontem_inicio <= abandoned_at < ontem_fim):
-            continue  # pula se não foi abandonado ontem
+# LOG elegante
+print(f"\n📅 Carrinhos abandonados em {ontem_inicio.date()}: {len(carrinhos_ontem)}")
 
-        # Dados principais
+if len(carrinhos_ontem) == 0:
+    print("ℹ️ Nenhum carrinho abandonado encontrado ontem. Nada será enviado para a planilha.")
+else:
+    print("🚀 Enviando carrinhos para a planilha...\n")
+
+# Loop dos carrinhos filtrados
+for cart, abandoned_at in carrinhos_ontem:
+    try:
         cart_id = cart.get("id")
         token = cart.get("token", "")
 
@@ -122,7 +133,6 @@ for cart in carts_data:
         else:
             link_checkout = "Não encontrado"
 
-        # Envia para o Google Sheets
         sheet.append_row([
             cart_id,
             customer_name,
@@ -135,7 +145,7 @@ for cart in carts_data:
             link_checkout
         ])
 
-        print(f"✅ Carrinho {cart_id} (abandonado em {abandoned_at}) adicionado com sucesso.")
+        print(f"✅ Carrinho {cart_id} (abandonado às {abandoned_at.strftime('%H:%M')}) adicionado com sucesso.")
 
     except Exception as e:
         import traceback
