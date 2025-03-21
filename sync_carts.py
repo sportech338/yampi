@@ -72,10 +72,10 @@ for cart in carts_data:
         total = cart.get("totalizers", {}).get("total", 0)
 
         # Momento do abandono
-        checkout_step = cart.get("checkout_step")  # Verificar se está vindo como int
-        abandoned_at = step_map.get(checkout_step, "Desconhecido")
+        abandoned_step = cart.get("abandoned_step")  # Pegando corretamente o campo
+        abandoned_step_name = step_map.get(abandoned_step, "Desconhecido")
         
-        print(f"DEBUG - Etapa de abandono: {checkout_step} -> {abandoned_at}")  # Debug
+        print(f"DEBUG - Etapa de abandono: {abandoned_step} -> {abandoned_step_name}")  # Debug
 
         # Adiciona os dados na planilha
         sheet.append_row([
@@ -86,7 +86,7 @@ for cart in carts_data:
             product_name,
             quantity,
             total,
-            abandoned_at
+            abandoned_step_name  # Alterado para abandoned_step
         ])
 
         print(f"Carrinho {cart_id} adicionado com sucesso.")
