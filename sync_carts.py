@@ -81,10 +81,15 @@ def formatar_telefone(numero):
 carrinhos_filtrados = []
 for cart in carts_data:
     updated_at = cart.get("updated_at")
-    if updated_at:
-        dt = datetime.strptime(updated_at, "%Y-%m-%dT%H:%M:%S%z").astimezone(tz)
-        if inicio_ontem <= dt <= fim_ontem:
-            carrinhos_filtrados.append(cart)
+    if isinstance(updated_at, dict):
+        data_str = updated_at.get("date")
+        if data_str:
+            try:
+                dt = datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.utc).astimezone(tz)
+                if inicio_ontem <= dt <= fim_ontem:
+                    carrinhos_filtrados.append(cart)
+            except Exception as e:
+                print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
 print(f"🛒 Carrinhos filtrados para o dia anterior: {len(carrinhos_filtrados)}")
 
