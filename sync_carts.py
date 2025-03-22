@@ -137,21 +137,21 @@ for cart in carrinhos_filtrados:
 
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
-
         abandonou_em = cart.get("abandoned_step", "Desconhecido")
 
-sheet.append_row([
-    cart_id,
-    customer_name,
-    customer_email,
-    cpf,
-    telefone_formatado or "Não encontrado",
-    product_name,
-    quantity,
-    total,
-    link_checkout,
-    abandonou_em
-])
+        # Agora com o campo "abandonou_em"
+        sheet.append_row([
+            cart_id,
+            customer_name,
+            customer_email,
+            cpf,
+            telefone_formatado or "Não encontrado",
+            product_name,
+            quantity,
+            total,
+            link_checkout,
+            abandonou_em
+        ])
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
         adicionados += 1
