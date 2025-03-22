@@ -85,7 +85,7 @@ for cart in carts_data:
         data_str = updated_at.get("date")
         if data_str:
             try:
-                dt = datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.utc).astimezone(tz)
+                dt = tz.localize(datetime.strptime(data_str, "%d/%m/%Y %H:%M"))
                 if inicio_ontem <= dt <= fim_ontem:
                     carrinhos_filtrados.append(cart)
             except Exception as e:
