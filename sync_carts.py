@@ -89,24 +89,10 @@ def formatar_telefone(numero):
 
 # Mapeamento das etapas de abandono
 etapas = {
-     "personal_data": "🧑 Dados pessoais",
-    "personal": "🧑 Dados pessoais",
-    "register": "🧑 Dados pessoais",
-    "dados pessoais": "🧑 Dados pessoais",
-    "customer_data": "🧑 Dados pessoais",
-    "personalinfo": "🧑 Dados pessoais",
-    "personal_details": "🧑 Dados pessoais",
-    "user_information": "🧑 Dados pessoais",
-    "user_registration": "🧑 Dados pessoais",
-    "info": "🧑 Dados pessoais",
-    "info_dados_pessoais": "🧑 Dados pessoais",
-    "dados_pessoais_register": "🧑 Dados pessoais",
-    "dados_pessoais_info": "🧑 Dados pessoais",
-    "info_register": "🧑 Dados pessoais",
-    "customer_personal_data": "🧑 Dados pessoais",
-    "shipping": "🚎 Entrega",
-    "shippment": "🚎 Entrega",
-    "entrega": "🚎 Entrega",
+    "personal_data": "🙋‍♂️ Dados pessoais",
+    "shipping": "📦 Entrega",
+    "shippment": "📦 Entrega",
+    "entrega": "📦 Entrega",
     "payment": "💳 Pagamento",
     "pagamento": "💳 Pagamento"
 }
@@ -162,15 +148,16 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        abandonou_em = "Desconhecido"
+         abandonou_em = "🙋‍♂️ Dados pessoais"
         for origem in [
             cart.get("abandoned_step"),
             cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
             cart.get("search", {}).get("data", {}).get("abandoned_step")
         ]:
             if origem:
-                abandonou_em = etapas.get(origem.strip().lower(), "Desconhecido")
-                if abandonou_em != "Desconhecido":
+                etapa = etapas.get(origem.strip().lower())
+                if etapa and etapa in ["🚎 Entrega", "💳 Pagamento"]:
+                    abandonou_em = etapa
                     break
 
         sheet.append_row([
