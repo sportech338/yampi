@@ -47,6 +47,13 @@ while True:
         print(f"❌ Erro ao buscar página {page} da Yampi: {e}")
         break
 
+# 🔍 DEBUG TEMPORÁRIO: Mostrar estrutura de um carrinho
+if carts_data:
+    print("🔍 Estrutura de um carrinho:")
+    print(json.dumps(carts_data[0], indent=2, ensure_ascii=False))
+    print("⚠️ Atenção: o script parou após mostrar a estrutura do carrinho. Remova o 'break' para continuar.")
+    exit()
+
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
