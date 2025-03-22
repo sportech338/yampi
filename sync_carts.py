@@ -29,9 +29,6 @@ headers = {
     "Accept": "application/json"
 }
 
-# Criar arquivo de log
-log_file = open("logs_carrinhos.txt", "w", encoding="utf-8")
-
 # Paginação: busca todas as páginas de carrinhos
 carts_data = []
 page = 1
@@ -67,7 +64,7 @@ ids_existentes = [str(row[0]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(texto):
-    match = re.search(r'\d{3}\.??\d{3}\.??\d{3}-??\d{2}', texto)
+    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
     if match:
         cpf = re.sub(r'\D', '', match.group())
         if len(cpf) == 11:
@@ -78,7 +75,7 @@ def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
         apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.??\d{3}\.??\d{3}-??\d{2}', numero):
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
             return numero
     return ""
 
@@ -117,9 +114,7 @@ for cart in carrinhos_filtrados:
 
         if cart_id in ids_existentes:
             ignorados += 1
-            msg = f"⚠️ Ignorado: {cart_id} (já existe)"
-            print(msg)
-            log_file.write(msg + "\n")
+            print(f"⚠️ Carrinho {cart_id} já existe na planilha. Ignorado.")
             continue
 
         tracking = cart.get("tracking_data", {})
@@ -142,7 +137,6 @@ for cart in carrinhos_filtrados:
 
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
-        abandonou_em = cart.get("abandoned_step", "Desconhecido")
 
         sheet.append_row([
             cart_id,
@@ -153,23 +147,16 @@ for cart in carrinhos_filtrados:
             product_name,
             quantity,
             total,
-            link_checkout,
-            abandonou_em
+            link_checkout
         ])
 
-        msg = f"✅ Adicionado: {cart_id}"
-        print(msg)
-        log_file.write(msg + "\n")
+        print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
         adicionados += 1
 
     except Exception as e:
-        msg = f"❌ Erro: {cart.get('id')} - {e}"
-        print(msg)
-        log_file.write(msg + "\n")
+        print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
 
-# Logs finais
-log_file.close()
-
+# Logs
 try:
     aba_logs = spreadsheet.worksheet("Logs")
 except gspread.exceptions.WorksheetNotFound:
