@@ -64,7 +64,7 @@ ids_existentes = [str(row[0]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(texto):
-    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
+    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
     if match:
         cpf = re.sub(r'\D', '', match.group())
         if len(cpf) == 11:
@@ -75,7 +75,7 @@ def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
         apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
             return numero
     return ""
 
@@ -91,6 +91,7 @@ def formatar_telefone(numero):
 etapas = {
     "personal_data": "🧑 Dados pessoais",
     "personal": "🧑 Dados pessoais",
+    "register": "🧑 Dados pessoais",
     "dados pessoais": "🧑 Dados pessoais",
     "shipping": "🚎 Entrega",
     "shippment": "🚎 Entrega",
