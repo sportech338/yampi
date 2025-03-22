@@ -64,7 +64,7 @@ ids_existentes = [str(row[0]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(texto):
-    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
+    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
     if match:
         cpf = re.sub(r'\D', '', match.group())
         if len(cpf) == 11:
@@ -75,7 +75,7 @@ def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
         apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
             return numero
     return ""
 
@@ -91,9 +91,12 @@ def formatar_telefone(numero):
 etapas = {
     "personal_data": "🧑 Dados pessoais",
     "personal": "🧑 Dados pessoais",
-    "shipping": "🚞 Entrega",
-    "shippment": "🚞 Entrega",
-    "payment": "💳 Pagamento"
+    "dados pessoais": "🧑 Dados pessoais",
+    "shipping": "🚎 Entrega",
+    "shippment": "🚎 Entrega",
+    "entrega": "🚎 Entrega",
+    "payment": "💳 Pagamento",
+    "pagamento": "💳 Pagamento"
 }
 
 # Filtrar carrinhos com updated_at de ontem
@@ -110,7 +113,7 @@ for cart in carts_data:
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
-print(f"🛂 Carrinhos filtrados para o dia anterior: {len(carrinhos_filtrados)}")
+print(f"😂 Carrinhos filtrados para o dia anterior: {len(carrinhos_filtrados)}")
 
 # Enviar para planilha
 adicionados = 0
@@ -147,11 +150,12 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        # Identifica o passo de abandono
         abandonou_em = "Desconhecido"
-        for origem in [cart.get("abandoned_step"),
-                       cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
-                       cart.get("search", {}).get("data", {}).get("abandoned_step")]:
+        for origem in [
+            cart.get("abandoned_step"),
+            cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
+            cart.get("search", {}).get("data", {}).get("abandoned_step")
+        ]:
             if origem:
                 abandonou_em = etapas.get(origem.strip().lower(), "Desconhecido")
                 if abandonou_em != "Desconhecido":
