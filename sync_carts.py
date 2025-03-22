@@ -20,22 +20,31 @@ ontem = agora - timedelta(days=1)
 inicio_ontem = ontem.replace(hour=0, minute=0, second=0, microsecond=0)
 fim_ontem = ontem.replace(hour=23, minute=59, second=59, microsecond=0)
 
-# URL da API (sem export)
-URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
+# URL base da API (sem export)
+BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 headers = {
     "User-token": TOKEN,
     "User-Secret-Key": SECRET_KEY,
     "Accept": "application/json"
 }
 
-# Requisição
-try:
-    response = requests.get(URL, headers=headers, timeout=30)
-    response.raise_for_status()
-    carts_data = response.json().get("data", [])
-except Exception as e:
-    print("❌ Erro ao buscar carrinhos:", e)
-    carts_data = []
+# Paginação: busca todas as páginas de carrinhos
+carts_data = []
+page = 1
+while True:
+    paginated_url = f"{BASE_URL}?page={page}"
+    try:
+        response = requests.get(paginated_url, headers=headers, timeout=30)
+        response.raise_for_status()
+        data = response.json().get("data", [])
+        if not data:
+            break  # acabou
+        carts_data.extend(data)
+        print(f"📄 Página {page} carregada com {len(data)} carrinhos.")
+        page += 1
+    except Exception as e:
+        print(f"❌ Erro ao buscar página {page} da Yampi: {e}")
+        break
 
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
