@@ -6,47 +6,35 @@ import json
 import re
 from datetime import datetime, timedelta
 import pytz
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
+DOMINIO_LOJA = "seguro.lojasportech.com"
 
-# Filtro de datas - intervalo de ontem (horário de São Paulo)
+# Fuso horário de São Paulo
 tz = pytz.timezone("America/Sao_Paulo")
-ontem = datetime.now(tz) - timedelta(days=1)
-data_inicio = ontem.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-data_fim = ontem.replace(hour=23, minute=59, second=59, microsecond=0).isoformat()
+agora = datetime.now(tz)
+ontem = agora - timedelta(days=1)
+inicio_ontem = ontem.replace(hour=0, minute=0, second=0, microsecond=0)
+fim_ontem = ontem.replace(hour=23, minute=59, second=59, microsecond=0)
 
-# URL da API com filtro de data
-URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts/export?updated_at[start]={data_inicio}&updated_at[end]={data_fim}"
-
+# URL da API (sem export)
+URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 headers = {
     "User-token": TOKEN,
     "User-Secret-Key": SECRET_KEY,
     "Accept": "application/json"
 }
 
-# Sessão com retries e timeout
-session = requests.Session()
-retry = Retry(total=3, backoff_factor=3, status_forcelist=[500, 502, 503, 504])
-adapter = HTTPAdapter(max_retries=retry)
-session.mount('https://', adapter)
-
+# Requisição
 try:
-    response = session.get(URL, headers=headers, timeout=30)
-except requests.exceptions.RequestException as e:
-    print("❌ Erro de conexão com a API da Yampi:", e)
-    response = None
-
-if response and response.status_code == 200:
+    response = requests.get(URL, headers=headers, timeout=30)
+    response.raise_for_status()
     carts_data = response.json().get("data", [])
-    print(f"Carrinhos abandonados encontrados: {len(carts_data)}")
-else:
-    status = response.status_code if response else "SEM RESPOSTA"
-    print(f"Erro ao buscar carrinhos: {status}")
+except Exception as e:
+    print("❌ Erro ao buscar carrinhos:", e)
     carts_data = []
 
 # Autenticação com Google Sheets
@@ -61,7 +49,7 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Buscar todos os IDs já existentes na planilha para evitar duplicatas
+# Buscar carrinhos já adicionados
 ids_existentes = [str(row[0]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
@@ -89,32 +77,36 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Domínio correto do checkout funcional
-dominio_loja = "seguro.lojasportech.com"
-
-# Loop dos carrinhos
+# Filtrar apenas carrinhos abandonados/modificados ontem
+carrinhos_filtrados = []
 for cart in carts_data:
+    updated_at = cart.get("updated_at")
+    if updated_at:
+        dt = datetime.strptime(updated_at, "%Y-%m-%dT%H:%M:%S%z").astimezone(tz)
+        if inicio_ontem <= dt <= fim_ontem:
+            carrinhos_filtrados.append(cart)
+
+print(f"🛒 Carrinhos filtrados para o dia anterior: {len(carrinhos_filtrados)}")
+
+# Processar e enviar para Google Sheets
+adicionados = 0
+ignorados = 0
+
+for cart in carrinhos_filtrados:
     try:
         cart_id = str(cart.get("id"))
         token = cart.get("token", "")
 
-        # Evitar duplicação
         if cart_id in ids_existentes:
-            print(f"⚠️ Carrinho {cart_id} já está na planilha. Pulando.")
+            ignorados += 1
+            print(f"⚠️ Carrinho {cart_id} já existe na planilha. Ignorado.")
             continue
 
-        print(f"\n🛒 CARRINHO ID: {cart_id}")
-        print(f"🔐 TOKEN: {token}")
-        print(f"🔗 LINK GERADO: https://{dominio_loja}/cart?cart_token={token}")
-        print("📦 CONTEÚDO DO CARRINHO:")
-        print(json.dumps(cart, indent=2, ensure_ascii=False)[:2000])
-
-        # Nome e email
+        # Dados do cliente
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        # CPF e telefone
         cart_json_str = json.dumps(cart)
         cpf = extrair_cpf(cart_json_str)
         telefone = extrair_telefone(cart_json_str)
@@ -131,8 +123,7 @@ for cart in carts_data:
             quantity = 0
 
         total = cart.get("totalizers", {}).get("total", 0)
-
-        link_checkout = f"https://{dominio_loja}/cart?cart_token={token}" if token else "Não encontrado"
+        link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
         # Envia para o Google Sheets
         sheet.append_row([
@@ -148,23 +139,19 @@ for cart in carts_data:
         ])
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
+        adicionados += 1
 
     except Exception as e:
-        import traceback
-        print("❌ Erro ao processar um carrinho:")
-        traceback.print_exc()
+        print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
 
-# Aba de logs
+# Logs
 try:
     aba_logs = spreadsheet.worksheet("Logs")
 except gspread.exceptions.WorksheetNotFound:
     aba_logs = spreadsheet.add_worksheet(title="Logs", rows="1000", cols="5")
-    aba_logs.append_row(["Data", "Quantidade de carrinhos recebidos", "Quantidade adicionados", "Quantidade ignorados", "Erro?"])
+    aba_logs.append_row(["Data", "Total do dia", "Adicionados", "Ignorados", "Erro?"])
 
-data_execucao = datetime.now(tz).strftime("%d/%m/%Y %H:%M")
-qtd_recebidos = len(carts_data)
-qtd_ignorados = len([c for c in carts_data if str(c.get("id")) in ids_existentes])
-qtd_adicionados = qtd_recebidos - qtd_ignorados
-houve_erro = "Sim" if qtd_recebidos == 0 else "Não"
+data_execucao = agora.strftime("%d/%m/%Y %H:%M")
+houve_erro = "Não" if adicionados > 0 else "Sim"
 
-aba_logs.append_row([data_execucao, qtd_recebidos, qtd_adicionados, qtd_ignorados, houve_erro])
+aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
