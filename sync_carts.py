@@ -87,6 +87,13 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
+# Mapeamento das etapas de abandono
+etapas = {
+    "personal_data": "🧍 Dados pessoais",
+    "shipping": "📦 Entrega",
+    "payment": "💳 Pagamento"
+}
+
 # Filtrar carrinhos com updated_at de ontem
 carrinhos_filtrados = []
 for cart in carts_data:
@@ -138,6 +145,8 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
+        abandonou_em = etapas.get(cart.get("abandoned_step"), "Desconhecido")
+
         sheet.append_row([
             cart_id,
             customer_name,
@@ -147,7 +156,8 @@ for cart in carrinhos_filtrados:
             product_name,
             quantity,
             total,
-            link_checkout
+            link_checkout,
+            abandonou_em
         ])
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
