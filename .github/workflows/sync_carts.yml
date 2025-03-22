@@ -27,3 +27,9 @@ jobs:
           YAMPI_SECRET_KEY: ${{ secrets.YAMPI_SECRET_KEY }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
         run: python sync_carts.py
+
+      - name: Salvar log como Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: logs-carrinhos
+          path: logs_carrinhos.txt
