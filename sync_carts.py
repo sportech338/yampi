@@ -89,8 +89,10 @@ def formatar_telefone(numero):
 
 # Mapeamento das etapas de abandono
 etapas = {
-    "personal": "🧍 Dados pessoais",
-    "shippment": "📦 Entrega",
+    "personal_data": "🧑 Dados pessoais",
+    "personal": "🧑 Dados pessoais",
+    "shipping": "🚞 Entrega",
+    "shippment": "🚞 Entrega",
     "payment": "💳 Pagamento"
 }
 
@@ -108,7 +110,7 @@ for cart in carts_data:
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
-print(f"🛒 Carrinhos filtrados para o dia anterior: {len(carrinhos_filtrados)}")
+print(f"🛂 Carrinhos filtrados para o dia anterior: {len(carrinhos_filtrados)}")
 
 # Enviar para planilha
 adicionados = 0
@@ -145,9 +147,15 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        abandonou_em = etapas.get(cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step")) \
-            or etapas.get(cart.get("search", {}).get("data", {}).get("abandoned_step")) \
-            or "Desconhecido"
+        # Identifica o passo de abandono
+        abandonou_em = "Desconhecido"
+        for origem in [cart.get("abandoned_step"),
+                       cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
+                       cart.get("search", {}).get("data", {}).get("abandoned_step")]:
+            if origem:
+                abandonou_em = etapas.get(origem.strip().lower(), "Desconhecido")
+                if abandonou_em != "Desconhecido":
+                    break
 
         sheet.append_row([
             cart_id,
