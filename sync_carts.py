@@ -4,14 +4,22 @@ from google.oauth2.service_account import Credentials
 import os
 import json
 import re
+from datetime import datetime, timedelta
+import pytz
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 
-# URL da API
-URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
+# Filtro de datas - intervalo de ontem (horário de São Paulo)
+tz = pytz.timezone("America/Sao_Paulo")
+ontem = datetime.now(tz) - timedelta(days=1)
+data_inicio = ontem.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+data_fim = ontem.replace(hour=23, minute=59, second=59, microsecond=0).isoformat()
+
+# URL da API com filtro de data
+URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts/export?updated_at[start]={data_inicio}&updated_at[end]={data_fim}"
 
 headers = {
     "User-token": TOKEN,
@@ -41,6 +49,9 @@ client = gspread.authorize(credentials)
 SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
+
+# Buscar todos os IDs já existentes na planilha para evitar duplicatas
+ids_existentes = [str(row[0]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(texto):
@@ -73,9 +84,14 @@ dominio_loja = "seguro.lojasportech.com"
 # Loop dos carrinhos
 for cart in carts_data:
     try:
-        # DEBUG
-        cart_id = cart.get("id")
+        cart_id = str(cart.get("id"))
         token = cart.get("token", "")
+
+        # Evitar duplicação
+        if cart_id in ids_existentes:
+            print(f"⚠️ Carrinho {cart_id} já está na planilha. Pulando.")
+            continue
+
         print(f"\n🛒 CARRINHO ID: {cart_id}")
         print(f"🔐 TOKEN: {token}")
         print(f"🔗 LINK GERADO: https://{dominio_loja}/cart?cart_token={token}")
@@ -105,13 +121,9 @@ for cart in carts_data:
 
         total = cart.get("totalizers", {}).get("total", 0)
 
-        # Link funcional do checkout
-        if token:
-            link_checkout = f"https://{dominio_loja}/cart?cart_token={token}"
-        else:
-            link_checkout = "Não encontrado"
+        link_checkout = f"https://{dominio_loja}/cart?cart_token={token}" if token else "Não encontrado"
 
-        # Envia para o Google Sheets (sem a coluna "NÚMERO")
+        # Envia para o Google Sheets
         sheet.append_row([
             cart_id,
             customer_name,
