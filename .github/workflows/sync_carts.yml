@@ -28,8 +28,8 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
         run: python sync_carts.py
 
-      - name: Salvar log como Artifact
-        uses: actions/upload-artifact@v3
+            - name: Salvar log como Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: logs-carrinhos
           path: logs_carrinhos.txt
