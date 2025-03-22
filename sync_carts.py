@@ -47,13 +47,6 @@ while True:
         print(f"❌ Erro ao buscar página {page} da Yampi: {e}")
         break
 
-# 🔍 DEBUG TEMPORÁRIO: Mostrar estrutura de um carrinho
-if carts_data:
-    print("🔍 Estrutura de um carrinho:")
-    print(json.dumps(carts_data[0], indent=2, ensure_ascii=False))
-    print("⚠️ Atenção: o script parou após mostrar a estrutura do carrinho. Remova o 'break' para continuar.")
-    exit()
-
 # Autenticação com Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -71,7 +64,7 @@ ids_existentes = [str(row[0]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(texto):
-    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
+    match = re.search(r'\d{3}\.??\d{3}\.??\d{3}-??\d{2}', texto)
     if match:
         cpf = re.sub(r'\D', '', match.group())
         if len(cpf) == 11:
@@ -82,7 +75,7 @@ def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
         apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.??\d{3}\.??\d{3}-??\d{2}', numero):
             return numero
     return ""
 
@@ -94,10 +87,10 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Mapeamento das etapas de abandono
+# Mapeamento das etapas de abandono (corrigido)
 etapas = {
     "personal_data": "🧍 Dados pessoais",
-    "shipping": "📦 Entrega",
+    "shippment": "📦 Entrega",  # com erro de digitação mesmo
     "payment": "💳 Pagamento"
 }
 
@@ -152,7 +145,8 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        abandonou_em = etapas.get(cart.get("abandoned_step"), "Desconhecido")
+        abandoned_raw = cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step", "")
+        abandonou_em = etapas.get(abandoned_raw, "Desconhecido")
 
         sheet.append_row([
             cart_id,
