@@ -64,7 +64,7 @@ ids_existentes = [str(row[0]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(texto):
-    match = re.search(r'\d{3}\.??\d{3}\.??\d{3}-??\d{2}', texto)
+    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
     if match:
         cpf = re.sub(r'\D', '', match.group())
         if len(cpf) == 11:
@@ -75,7 +75,7 @@ def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
         apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.??\d{3}\.??\d{3}-??\d{2}', numero):
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
             return numero
     return ""
 
@@ -87,10 +87,10 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Mapeamento das etapas de abandono (corrigido)
+# Mapeamento das etapas de abandono
 etapas = {
-    "personal_data": "🧍 Dados pessoais",
-    "shippment": "📦 Entrega",  # com erro de digitação mesmo
+    "personal": "🧍 Dados pessoais",
+    "shippment": "📦 Entrega",
     "payment": "💳 Pagamento"
 }
 
@@ -145,8 +145,9 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        abandoned_raw = cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step", "")
-        abandonou_em = etapas.get(abandoned_raw, "Desconhecido")
+        abandonou_em = etapas.get(cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step")) \
+            or etapas.get(cart.get("search", {}).get("data", {}).get("abandoned_step")) \
+            or "Desconhecido"
 
         sheet.append_row([
             cart_id,
