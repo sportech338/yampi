@@ -6,6 +6,8 @@ import json
 import re
 from datetime import datetime, timedelta
 import pytz
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -27,15 +29,24 @@ headers = {
     "Accept": "application/json"
 }
 
-# Requisição para a Yampi
-response = requests.get(URL, headers=headers)
+# Sessão com retries e timeout
+session = requests.Session()
+retry = Retry(total=3, backoff_factor=3, status_forcelist=[500, 502, 503, 504])
+adapter = HTTPAdapter(max_retries=retry)
+session.mount('https://', adapter)
 
-if response.status_code == 200:
+try:
+    response = session.get(URL, headers=headers, timeout=30)
+except requests.exceptions.RequestException as e:
+    print("❌ Erro de conexão com a API da Yampi:", e)
+    response = None
+
+if response and response.status_code == 200:
     carts_data = response.json().get("data", [])
     print(f"Carrinhos abandonados encontrados: {len(carts_data)}")
 else:
-    print("Erro ao buscar carrinhos:", response.status_code)
-    print(response.text)
+    status = response.status_code if response else "SEM RESPOSTA"
+    print(f"Erro ao buscar carrinhos: {status}")
     carts_data = []
 
 # Autenticação com Google Sheets
@@ -143,14 +154,12 @@ for cart in carts_data:
         print("❌ Erro ao processar um carrinho:")
         traceback.print_exc()
 
-# Criar ou acessar aba de logs
+# Aba de logs
 try:
     aba_logs = spreadsheet.worksheet("Logs")
 except gspread.exceptions.WorksheetNotFound:
     aba_logs = spreadsheet.add_worksheet(title="Logs", rows="1000", cols="5")
     aba_logs.append_row(["Data", "Quantidade de carrinhos recebidos", "Quantidade adicionados", "Quantidade ignorados", "Erro?"])
-
-from datetime import datetime
 
 data_execucao = datetime.now(tz).strftime("%d/%m/%Y %H:%M")
 qtd_recebidos = len(carts_data)
@@ -158,5 +167,4 @@ qtd_ignorados = len([c for c in carts_data if str(c.get("id")) in ids_existentes
 qtd_adicionados = qtd_recebidos - qtd_ignorados
 houve_erro = "Sim" if qtd_recebidos == 0 else "Não"
 
-# Escreve o log na planilha
 aba_logs.append_row([data_execucao, qtd_recebidos, qtd_adicionados, qtd_ignorados, houve_erro])
