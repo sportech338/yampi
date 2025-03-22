@@ -89,10 +89,16 @@ def formatar_telefone(numero):
 
 # Mapeamento das etapas de abandono
 etapas = {
-    "personal_data": "🧑 Dados pessoais",
+     "personal_data": "🧑 Dados pessoais",
     "personal": "🧑 Dados pessoais",
     "register": "🧑 Dados pessoais",
     "dados pessoais": "🧑 Dados pessoais",
+    "customer_data": "🧑 Dados pessoais",
+    "personalinfo": "🧑 Dados pessoais",
+    "personal_details": "🧑 Dados pessoais",
+    "user_information": "🧑 Dados pessoais",
+    "user_registration": "🧑 Dados pessoais",
+    "info": "🧑 Dados pessoais",
     "shipping": "🚎 Entrega",
     "shippment": "🚎 Entrega",
     "entrega": "🚎 Entrega",
