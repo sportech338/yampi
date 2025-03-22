@@ -16,9 +16,10 @@ DOMINIO_LOJA = "seguro.lojasportech.com"
 # Fuso horário de São Paulo
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
-ontem = agora - timedelta(days=1)
-inicio_ontem = ontem.replace(hour=0, minute=0, second=0, microsecond=0)
-fim_ontem = ontem.replace(hour=23, minute=59, second=59, microsecond=0)
+
+# Intervalo do dia anterior no fuso de São Paulo
+ontem_inicio = tz.localize(datetime.combine((agora - timedelta(days=1)).date(), datetime.min.time()))
+ontem_fim = tz.localize(datetime.combine((agora - timedelta(days=1)).date(), datetime.max.time()))
 
 # URL base da API (sem export)
 BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
@@ -38,7 +39,7 @@ while True:
         response.raise_for_status()
         data = response.json().get("data", [])
         if not data:
-            break  # acabou
+            break
         carts_data.extend(data)
         print(f"📄 Página {page} carregada com {len(data)} carrinhos.")
         page += 1
@@ -86,7 +87,7 @@ def formatar_telefone(numero):
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
     return ""
 
-# Filtrar apenas carrinhos abandonados/modificados ontem
+# Filtrar carrinhos com updated_at de ontem
 carrinhos_filtrados = []
 for cart in carts_data:
     updated_at = cart.get("updated_at")
@@ -95,14 +96,14 @@ for cart in carts_data:
         if data_str:
             try:
                 dt = datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S.%f").replace(tzinfo=pytz.utc).astimezone(tz)
-                if inicio_ontem <= dt <= fim_ontem:
+                if ontem_inicio <= dt <= ontem_fim:
                     carrinhos_filtrados.append(cart)
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
 print(f"🛒 Carrinhos filtrados para o dia anterior: {len(carrinhos_filtrados)}")
 
-# Processar e enviar para Google Sheets
+# Enviar para planilha
 adicionados = 0
 ignorados = 0
 
@@ -116,7 +117,6 @@ for cart in carrinhos_filtrados:
             print(f"⚠️ Carrinho {cart_id} já existe na planilha. Ignorado.")
             continue
 
-        # Dados do cliente
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
@@ -126,7 +126,6 @@ for cart in carrinhos_filtrados:
         telefone = extrair_telefone(cart_json_str)
         telefone_formatado = formatar_telefone(telefone)
 
-        # Produto
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
             first_item = items_data[0]
@@ -139,7 +138,6 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        # Envia para o Google Sheets
         sheet.append_row([
             cart_id,
             customer_name,
