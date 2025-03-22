@@ -142,3 +142,21 @@ for cart in carts_data:
         import traceback
         print("❌ Erro ao processar um carrinho:")
         traceback.print_exc()
+
+# Criar ou acessar aba de logs
+try:
+    aba_logs = spreadsheet.worksheet("Logs")
+except gspread.exceptions.WorksheetNotFound:
+    aba_logs = spreadsheet.add_worksheet(title="Logs", rows="1000", cols="5")
+    aba_logs.append_row(["Data", "Quantidade de carrinhos recebidos", "Quantidade adicionados", "Quantidade ignorados", "Erro?"])
+
+from datetime import datetime
+
+data_execucao = datetime.now(tz).strftime("%d/%m/%Y %H:%M")
+qtd_recebidos = len(carts_data)
+qtd_ignorados = len([c for c in carts_data if str(c.get("id")) in ids_existentes])
+qtd_adicionados = qtd_recebidos - qtd_ignorados
+houve_erro = "Sim" if qtd_recebidos == 0 else "Não"
+
+# Escreve o log na planilha
+aba_logs.append_row([data_execucao, qtd_recebidos, qtd_adicionados, qtd_ignorados, houve_erro])
