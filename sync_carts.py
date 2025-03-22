@@ -148,7 +148,7 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-         abandonou_em = "🙋‍♂️ Dados pessoais"
+        abandonou_em = "🙋‍♂️ Dados pessoais"
         for origem in [
             cart.get("abandoned_step"),
             cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
@@ -156,10 +156,11 @@ for cart in carrinhos_filtrados:
         ]:
             if origem:
                 etapa = etapas.get(origem.strip().lower())
-                if etapa and etapa in ["🚎 Entrega", "💳 Pagamento"]:
+                if etapa and etapa in ["📦 Entrega", "💳 Pagamento"]:
                     abandonou_em = etapa
                     break
 
+        # Adicionar dados ao Google Sheets (supondo que o método seja correto)
         sheet.append_row([
             cart_id,
             customer_name,
