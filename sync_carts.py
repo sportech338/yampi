@@ -107,6 +107,7 @@ for cart in carts_data:
             try:
                 dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S.%f"))
                 if ontem_inicio <= dt <= ontem_fim:
+                    cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                     carrinhos_filtrados.append(cart)
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
@@ -160,7 +161,9 @@ for cart in carrinhos_filtrados:
                     abandonou_em = etapa
                     break
 
-        # Adicionar dados ao Google Sheets (supondo que o método seja correto)
+        data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
+
+        # Adicionar dados ao Google Sheets (incluindo a nova coluna)
         sheet.append_row([
             cart_id,
             customer_name,
@@ -171,7 +174,8 @@ for cart in carrinhos_filtrados:
             quantity,
             total,
             link_checkout,
-            abandonou_em
+            abandonou_em,
+            data_abandono_str
         ])
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
