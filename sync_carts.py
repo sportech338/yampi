@@ -105,7 +105,11 @@ for cart in carts_data:
         data_str = updated_at.get("date")
         if data_str:
             try:
-                dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S.%f"))
+                try:
+                    dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S.%f"))
+                except ValueError:
+                    dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S"))
+                
                 if ontem_inicio <= dt <= ontem_fim:
                     cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                     carrinhos_filtrados.append(cart)
