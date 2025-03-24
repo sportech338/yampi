@@ -60,7 +60,7 @@ spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
 # Buscar carrinhos já adicionados
-ids_existentes = [str(row[0]) for row in sheet.get_all_values()[1:] if row]
+ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(texto):
@@ -109,7 +109,7 @@ for cart in carts_data:
                     dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S.%f"))
                 except ValueError:
                     dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S"))
-                
+
                 if ontem_inicio <= dt <= ontem_fim:
                     cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                     carrinhos_filtrados.append(cart)
@@ -167,8 +167,9 @@ for cart in carrinhos_filtrados:
 
         data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
 
-        # Adicionar dados ao Google Sheets (incluindo a nova coluna)
+        # Adicionar dados ao Google Sheets na ordem solicitada
         sheet.append_row([
+            data_abandono_str,
             cart_id,
             customer_name,
             customer_email,
@@ -177,9 +178,8 @@ for cart in carrinhos_filtrados:
             product_name,
             quantity,
             total,
-            link_checkout,
             abandonou_em,
-            data_abandono_str
+            link_checkout
         ])
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
