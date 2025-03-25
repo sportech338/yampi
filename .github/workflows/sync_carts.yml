@@ -2,7 +2,7 @@ name: Sync Carts from Yampi to Google Sheets
 
 on:
   schedule:
-    - cron: '1 3 * * *'  # Executa todos os dias às 00:01 da manhã (horário de São Paulo / UTC-3)
+  - cron: '*/5 * * * *'  # Executa a cada 5 minutos (em UTC)
   workflow_dispatch:  # Permite rodar manualmente pelo GitHub Actions
 
 jobs:
