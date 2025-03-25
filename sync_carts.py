@@ -97,7 +97,7 @@ etapas = {
     "pagamento": "💳 Pagamento"
 }
 
-# Filtrar carrinhos com updated_at de hoje, há pelo menos 20 min e com transações recusadas/expiradas
+# Filtrar carrinhos válidos
 carrinhos_filtrados = []
 for cart in carts_data:
     updated_at = cart.get("updated_at")
@@ -112,13 +112,17 @@ for cart in carts_data:
 
                 if inicio_hoje <= dt <= limite_abandono:
                     transacoes = cart.get("transactions", {}).get("data", [])
-                    tem_transacao_valida = any(t.get("status") in ["refused", "expired"] for t in transacoes)
 
-                    if tem_transacao_valida:
-                        cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
-                        carrinhos_filtrados.append(cart)
-                    else:
-                        print(f"⛔ Carrinho {cart.get('id')} ignorado (transação não é 'refused' ou 'expired').")
+                    # Ignora carrinhos com transação aprovada
+                    tem_transacao_aprovada = any(t.get("status") == "paid" for t in transacoes)
+                    if tem_transacao_aprovada:
+                        print(f"⛔ Carrinho {cart.get('id')} ignorado (transação aprovada).")
+                        continue
+
+                    # Se passou por todas as condições acima, adiciona
+                    cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
+                    carrinhos_filtrados.append(cart)
+
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
