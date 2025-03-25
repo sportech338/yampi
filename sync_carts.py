@@ -17,9 +17,9 @@ DOMINIO_LOJA = "seguro.lojasportech.com"
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
 
-# Intervalo do dia anterior no fuso de São Paulo
-ontem_inicio = tz.localize(datetime.combine((agora - timedelta(days=1)).date(), datetime.min.time()))
-ontem_fim = tz.localize(datetime.combine((agora - timedelta(days=1)).date(), datetime.max.time()))
+# Limites: carrinhos de hoje e abandonados há pelo menos 20 minutos
+inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
+limite_abandono = agora - timedelta(minutes=20)
 
 # URL base da API (sem export)
 BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
@@ -97,7 +97,7 @@ etapas = {
     "pagamento": "💳 Pagamento"
 }
 
-# Filtrar carrinhos com updated_at de ontem
+# Filtrar carrinhos com updated_at de hoje, há pelo menos 20 min e sem transações
 carrinhos_filtrados = []
 for cart in carts_data:
     updated_at = cart.get("updated_at")
@@ -110,13 +110,17 @@ for cart in carts_data:
                 except ValueError:
                     dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S"))
 
-                if ontem_inicio <= dt <= ontem_fim:
-                    cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
-                    carrinhos_filtrados.append(cart)
+                if inicio_hoje <= dt <= limite_abandono:
+                    transacoes = cart.get("transactions", {}).get("data", [])
+                    if not transacoes:
+                        cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
+                        carrinhos_filtrados.append(cart)
+                    else:
+                        print(f"⛔ Carrinho {cart.get('id')} ignorado (possui transações).")
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
-print(f"😂 Carrinhos filtrados para o dia anterior: {len(carrinhos_filtrados)}")
+print(f"🧮 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
 
 # Enviar para planilha
 adicionados = 0
@@ -167,8 +171,8 @@ for cart in carrinhos_filtrados:
 
         data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
 
-        # Adicionar dados ao Google Sheets na ordem solicitada
-        sheet.append_row([
+        # Inserir dados no topo da planilha (linha 2)
+        sheet.insert_row([
             data_abandono_str,
             cart_id,
             customer_name,
@@ -180,7 +184,7 @@ for cart in carrinhos_filtrados:
             total,
             abandonou_em,
             link_checkout
-        ])
+        ], index=2)
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
         adicionados += 1
