@@ -64,43 +64,30 @@ ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(cart):
-    caminhos_possiveis = [
-        ("customer", "document"),
-        ("customer_data", "document"),
-        ("customer_data", "data", "document"),
-        ("customer", "data", "document")
-    ]
-    for caminho in caminhos_possiveis:
-        try:
-            valor = cart
-            for chave in caminho:
-                valor = valor.get(chave, {})
-            if isinstance(valor, str):
-                cpf = re.sub(r'\D', '', valor)
-                if len(cpf) == 11:
-                    return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
-        except Exception:
-            continue
+    try:
+        cpf = cart.get("customer", {}).get("data", {}).get("cpf")
+        if isinstance(cpf, str):
+            cpf = re.sub(r'\D', '', cpf)
+            if len(cpf) == 11:
+                return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
+    except Exception:
+        pass
     return "Não encontrado"
 
 def extrair_telefone(cart):
-    caminhos_possiveis = [
-        ("customer", "phone"),
-        ("customer_data", "phone"),
-        ("customer_data", "data", "phone"),
-        ("customer", "data", "phone")
-    ]
-    for caminho in caminhos_possiveis:
-        try:
-            valor = cart
-            for chave in caminho:
-                valor = valor.get(chave, {})
-            if isinstance(valor, str):
-                numero = re.sub(r'\D', '', valor)
-                if 10 <= len(numero) <= 11:
-                    return numero
-        except Exception:
-            continue
+    try:
+        telefone = cart.get("customer", {}).get("data", {}).get("phone", {}).get("full_number")
+        if telefone:
+            telefone = re.sub(r'\D', '', telefone)
+            if 10 <= len(telefone) <= 11:
+                return telefone
+        telefone_alt = cart.get("spreadsheet", {}).get("data", {}).get("customer_phone")
+        if telefone_alt:
+            telefone_alt = re.sub(r'\D', '', telefone_alt)
+            if 10 <= len(telefone_alt) <= 11:
+                return telefone_alt
+    except Exception:
+        pass
     return ""
 
 def formatar_telefone(numero):
@@ -153,9 +140,6 @@ ignorados = 0
 
 for cart in carrinhos_filtrados:
     try:
-        print(f"\n🛒 Carrinho ID: {cart.get('id')}")
-        print(json.dumps(cart, indent=2, ensure_ascii=False))
-
         cart_id = str(cart.get("id"))
         token = cart.get("token", "")
         if cart_id in ids_existentes:
