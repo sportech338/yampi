@@ -21,15 +21,16 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
-      - name: Rodar o script em loop até completar os dados
+      - name: Rodar o script em blocos de páginas
         env:
           YAMPI_API_TOKEN: ${{ secrets.YAMPI_API_TOKEN }}
           YAMPI_SECRET_KEY: ${{ secrets.YAMPI_SECRET_KEY }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
         run: |
-          for i in {1..5}; do
-            echo "🔄 Execução $i de 5 iniciada..."
-            python sync_carts.py || true
+          for i in {0..4}; do
+            START=$((1 + i * 10))
+            echo "🔄 Execução $((i+1)) | Páginas $START a $((START+9))"
+            python sync_carts.py --start_page=$START --max_pages=10 || true
             echo "🕒 Aguardando 70 segundos antes da próxima..."
             sleep 70
           done
