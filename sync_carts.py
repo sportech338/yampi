@@ -19,7 +19,7 @@ agora = datetime.now(tz)
 
 # Limites: carrinhos de hoje e abandonados há pelo menos 20 minutos
 inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
-limite_abandono = agora - timedelta(minutes=20)
+limite_abandono = agora - timedelta(minutes=15)
 
 # URL base da API (sem export)
 BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
