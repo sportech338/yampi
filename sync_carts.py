@@ -25,7 +25,7 @@ SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 DOMINIO_LOJA = "seguro.lojasportech.com"
 
 # Modo estendido para buscar carrinhos de até 7 dias atrás
-MODO_EXTENDIDO = True  # ← Altere para False para buscar apenas os de hoje
+MODO_EXTENDIDO = False  # ← Altere para False para buscar apenas os de hoje
 
 # Fuso horário de São Paulo
 tz = pytz.timezone("America/Sao_Paulo")
