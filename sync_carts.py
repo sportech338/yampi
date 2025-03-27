@@ -82,25 +82,28 @@ def extrair_cpf(cart):
                     cpfs_encontrados.add(cpf_limpo)
         except Exception:
             continue
+
     if not cpfs_encontrados:
         json_text = json.dumps(cart)
-        matches = re.findall(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', json_text)
+        matches = re.findall(r'\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b', json_text)
         for match in matches:
             cpf = re.sub(r'\D', '', match)
             if len(cpf) == 11:
                 cpfs_encontrados.add(cpf)
+
     for cpf in cpfs_encontrados:
         return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
     return "Não encontrado"
 
 def extrair_telefone(cart):
-    telefones_encontrados = set()
     caminhos_possiveis = [
         ("customer", "phone"),
         ("customer_data", "phone"),
         ("customer_data", "data", "phone"),
         ("customer", "data", "phone")
     ]
+    numeros = []
+
     for caminho in caminhos_possiveis:
         try:
             valor = cart
@@ -109,26 +112,31 @@ def extrair_telefone(cart):
             if isinstance(valor, str):
                 digitos = re.sub(r'\D', '', valor)
                 if 10 <= len(digitos) <= 11:
-                    telefones_encontrados.add(digitos)
+                    numeros.append(digitos)
         except Exception:
             continue
-    if not telefones_encontrados:
+
+    if not numeros:
         json_text = json.dumps(cart)
         matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', json_text)
         for numero in matches:
             apenas_digitos = re.sub(r'\D', '', numero)
-            if len(apenas_digitos) in [10, 11]:
-                telefones_encontrados.add(apenas_digitos)
-    for tel in telefones_encontrados:
-        return tel
+            if 10 <= len(apenas_digitos) <= 11:
+                numeros.append(apenas_digitos)
+
+    for num in numeros:
+        if len(num) == 11:
+            return num
+    if numeros:
+        return numeros[0]
     return ""
 
 def formatar_telefone(numero):
     digitos = re.sub(r'\D', '', numero)
-    if len(digitos) == 10:
-        return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
-    elif len(digitos) == 11:
+    if len(digitos) == 11:
         return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
+    elif len(digitos) == 10:
+        return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
     return ""
 
 # Mapeamento das etapas de abandono
