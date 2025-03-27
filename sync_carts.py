@@ -6,6 +6,7 @@ import json
 import re
 from datetime import datetime, timedelta
 import pytz
+import time
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -133,6 +134,9 @@ for cart in carts_data:
 
 print(f"🧲 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
 
+# Limitar quantidade para evitar estouro de quota (temporariamente)
+carrinhos_filtrados = carrinhos_filtrados[:50]
+
 # Enviar para planilha
 adicionados = 0
 ignorados = 0
@@ -200,6 +204,9 @@ for cart in carrinhos_filtrados:
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
         adicionados += 1
 
+        # Pausa para respeitar limite da API
+        time.sleep(1.1)
+
     except Exception as e:
         print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
 
@@ -213,4 +220,7 @@ except gspread.exceptions.WorksheetNotFound:
 data_execucao = agora.strftime("%d/%m/%Y %H:%M")
 houve_erro = "Não" if adicionados > 0 else "Sim"
 
-aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
+try:
+    aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
+except Exception as e:
+    print(f"Erro ao salvar log: {e}")
