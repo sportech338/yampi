@@ -6,17 +6,6 @@ import json
 import re
 from datetime import datetime, timedelta
 import pytz
-import time
-import argparse
-
-# Argumentos de linha de comando
-parser = argparse.ArgumentParser()
-parser.add_argument('--start_page', type=int, default=1, help='Página inicial da API')
-parser.add_argument('--max_pages', type=int, default=60, help='Máximo de páginas a buscar')
-args = parser.parse_args()
-
-start_page = args.start_page
-max_pages = args.max_pages
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -24,20 +13,12 @@ TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 DOMINIO_LOJA = "seguro.lojasportech.com"
 
-# Modo estendido para buscar carrinhos de até 7 dias atrás
-MODO_EXTENDIDO = False  # ← Altere para False para buscar apenas os de hoje
-
 # Fuso horário de São Paulo
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
 
-# Limites de busca de data conforme o modo
-if MODO_EXTENDIDO:
-    dias_para_tras = 7
-    inicio_periodo = tz.localize(datetime.combine((agora - timedelta(days=dias_para_tras)).date(), datetime.min.time()))
-else:
-    inicio_periodo = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
-
+# Limites: carrinhos de hoje e abandonados há pelo menos 20 minutos
+inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
 limite_abandono = agora - timedelta(minutes=20)
 
 # URL base da API (sem export)
@@ -50,8 +31,8 @@ headers = {
 
 # Paginação: busca todas as páginas de carrinhos
 carts_data = []
-page = start_page
-while page < start_page + max_pages:
+page = 1
+while True:
     paginated_url = f"{BASE_URL}?page={page}"
     try:
         response = requests.get(paginated_url, headers=headers, timeout=30)
@@ -83,16 +64,18 @@ ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(texto):
-    match = re.search(r'\d{3}\.\d{3}\.\d{3}-\d{2}', texto)
+    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
     if match:
-        return match.group()
+        cpf = re.sub(r'\D', '', match.group())
+        if len(cpf) == 11:
+            return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
     return "Não encontrado"
 
 def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
         apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.\d{3}\.\d{3}-\d{2}', numero):
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
             return numero
     return ""
 
@@ -106,7 +89,7 @@ def formatar_telefone(numero):
 
 # Mapeamento das etapas de abandono
 etapas = {
-    "personal_data": "👤 Dados pessoais",
+    "personal_data": "🙋‍♂️ Dados pessoais",
     "shipping": "📦 Entrega",
     "shippment": "📦 Entrega",
     "entrega": "📦 Entrega",
@@ -127,23 +110,23 @@ for cart in carts_data:
                 except ValueError:
                     dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S"))
 
-                if inicio_periodo <= dt <= limite_abandono:
+                if inicio_hoje <= dt <= limite_abandono:
                     transacoes = cart.get("transactions", {}).get("data", [])
+
+                    # Ignora carrinhos com transação aprovada
                     tem_transacao_aprovada = any(t.get("status") == "paid" for t in transacoes)
                     if tem_transacao_aprovada:
-                        print(f"❌ Carrinho {cart.get('id')} ignorado (transação aprovada).")
+                        print(f"⛔ Carrinho {cart.get('id')} ignorado (transação aprovada).")
                         continue
 
+                    # Se passou por todas as condições acima, adiciona
                     cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                     carrinhos_filtrados.append(cart)
 
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
-print(f"🧲 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
-
-# Limitar quantidade para evitar estouro de quota (temporariamente)
-carrinhos_filtrados = carrinhos_filtrados[:50]
+print(f"🧮 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
 
 # Enviar para planilha
 adicionados = 0
@@ -180,7 +163,7 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        abandonou_em = "👤 Dados pessoais"
+        abandonou_em = "🙋‍♂️ Dados pessoais"
         for origem in [
             cart.get("abandoned_step"),
             cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
@@ -212,9 +195,6 @@ for cart in carrinhos_filtrados:
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
         adicionados += 1
 
-        # Pausa para respeitar limite da API
-        time.sleep(1.1)
-
     except Exception as e:
         print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
 
@@ -228,7 +208,4 @@ except gspread.exceptions.WorksheetNotFound:
 data_execucao = agora.strftime("%d/%m/%Y %H:%M")
 houve_erro = "Não" if adicionados > 0 else "Sim"
 
-try:
-    aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
-except Exception as e:
-    print(f"Erro ao salvar log: {e}")
+aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
