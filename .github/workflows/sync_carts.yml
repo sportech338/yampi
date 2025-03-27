@@ -2,8 +2,8 @@ name: Sync Carts from Yampi to Google Sheets
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Executa a cada 5 minutos (em UTC)
-  workflow_dispatch:       # Permite rodar manualmente
+  - cron: '*/5 * * * *'  # Executa a cada 5 minutos (em UTC)
+  workflow_dispatch:  # Permite rodar manualmente pelo GitHub Actions
 
 jobs:
   run-script:
@@ -21,17 +21,9 @@ jobs:
       - name: Instalar dependências
         run: pip install -r requirements.txt
 
-      - name: Rodar o script em blocos de páginas
+      - name: Rodar o script de sincronização
         env:
           YAMPI_API_TOKEN: ${{ secrets.YAMPI_API_TOKEN }}
           YAMPI_SECRET_KEY: ${{ secrets.YAMPI_SECRET_KEY }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-        run: |
-          for i in {0..4}; do
-            START_PAGE=$((i * 10 + 1))
-            END_PAGE=$((START_PAGE + 9))
-            echo "🔄 Execução $((i+1)) | Páginas $START_PAGE a $END_PAGE"
-            python sync_carts.py --start_page=$START_PAGE --max_pages=$END_PAGE || true
-            echo "🕒 Aguardando 70 segundos antes da próxima..."
-            sleep 70
-          done
+        run: python sync_carts.py
