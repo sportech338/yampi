@@ -153,6 +153,9 @@ ignorados = 0
 
 for cart in carrinhos_filtrados:
     try:
+        print(f"\n🛒 Carrinho ID: {cart.get('id')}")
+        print(json.dumps(cart, indent=2, ensure_ascii=False))
+
         cart_id = str(cart.get("id"))
         token = cart.get("token", "")
         if cart_id in ids_existentes:
@@ -167,6 +170,9 @@ for cart in carrinhos_filtrados:
         cpf = extrair_cpf(cart)
         telefone = extrair_telefone(cart)
         telefone_formatado = formatar_telefone(telefone)
+
+        print(f"🧾 CPF extraído: {cpf}")
+        print(f"📞 Telefone extraído: {telefone} | Formatado: {telefone_formatado}")
 
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
