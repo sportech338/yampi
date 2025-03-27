@@ -13,12 +13,20 @@ TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 DOMINIO_LOJA = "seguro.lojasportech.com"
 
+# Modo estendido para buscar carrinhos de até 7 dias atrás
+MODO_EXTENDIDO = True  # ← Altere para False para buscar apenas os de hoje
+
 # Fuso horário de São Paulo
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
 
-# Limites: carrinhos de hoje e abandonados há pelo menos 20 minutos
-inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
+# Limites de busca de data conforme o modo
+if MODO_EXTENDIDO:
+    dias_para_tras = 7
+    inicio_periodo = tz.localize(datetime.combine((agora - timedelta(days=dias_para_tras)).date(), datetime.min.time()))
+else:
+    inicio_periodo = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
+
 limite_abandono = agora - timedelta(minutes=20)
 
 # URL base da API (sem export)
@@ -89,7 +97,7 @@ def formatar_telefone(numero):
 
 # Mapeamento das etapas de abandono
 etapas = {
-    "personal_data": "🙋‍♂️ Dados pessoais",
+    "personal_data": "👤 Dados pessoais",
     "shipping": "📦 Entrega",
     "shippment": "📦 Entrega",
     "entrega": "📦 Entrega",
@@ -110,23 +118,20 @@ for cart in carts_data:
                 except ValueError:
                     dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S"))
 
-                if inicio_hoje <= dt <= limite_abandono:
+                if inicio_periodo <= dt <= limite_abandono:
                     transacoes = cart.get("transactions", {}).get("data", [])
-
-                    # Ignora carrinhos com transação aprovada
                     tem_transacao_aprovada = any(t.get("status") == "paid" for t in transacoes)
                     if tem_transacao_aprovada:
-                        print(f"⛔ Carrinho {cart.get('id')} ignorado (transação aprovada).")
+                        print(f"❌ Carrinho {cart.get('id')} ignorado (transação aprovada).")
                         continue
 
-                    # Se passou por todas as condições acima, adiciona
                     cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                     carrinhos_filtrados.append(cart)
 
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
-print(f"🧮 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
+print(f"🧲 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
 
 # Enviar para planilha
 adicionados = 0
@@ -163,7 +168,7 @@ for cart in carrinhos_filtrados:
         total = cart.get("totalizers", {}).get("total", 0)
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        abandonou_em = "🙋‍♂️ Dados pessoais"
+        abandonou_em = "👤 Dados pessoais"
         for origem in [
             cart.get("abandoned_step"),
             cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
