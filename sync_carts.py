@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timedelta
 import pytz
 import time
+import sys
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -16,6 +17,10 @@ DOMINIO_LOJA = "seguro.lojasportech.com"
 
 # Modo estendido para buscar carrinhos de até 7 dias atrás
 MODO_EXTENDIDO = True  # ← Altere para False para buscar apenas os de hoje
+
+# Paginação por argumentos opcionais
+start_page = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+max_pages = int(sys.argv[2]) if len(sys.argv) > 2 else 60
 
 # Fuso horário de São Paulo
 tz = pytz.timezone("America/Sao_Paulo")
@@ -38,10 +43,10 @@ headers = {
     "Accept": "application/json"
 }
 
-# Paginação: busca todas as páginas de carrinhos
+# Paginação: busca a partir da página definida
 carts_data = []
-page = 1
-while True:
+page = start_page
+while page < start_page + max_pages:
     paginated_url = f"{BASE_URL}?page={page}"
     try:
         response = requests.get(paginated_url, headers=headers, timeout=30)
@@ -73,7 +78,7 @@ ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(texto):
-    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
+    match = re.search(r'\d{3}\.??\d{3}\.??\d{3}-??\d{2}', texto)
     if match:
         cpf = re.sub(r'\D', '', match.group())
         if len(cpf) == 11:
@@ -84,7 +89,7 @@ def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
         apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.??\d{3}\.??\d{3}-??\d{2}', numero):
             return numero
     return ""
 
@@ -186,7 +191,6 @@ for cart in carrinhos_filtrados:
 
         data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
 
-        # Inserir dados no topo da planilha (linha 2)
         sheet.insert_row([
             data_abandono_str,
             cart_id,
@@ -203,8 +207,6 @@ for cart in carrinhos_filtrados:
 
         print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
         adicionados += 1
-
-        # Pausa para respeitar limite da API
         time.sleep(1.1)
 
     except Exception as e:
