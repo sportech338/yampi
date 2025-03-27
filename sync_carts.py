@@ -63,20 +63,64 @@ sheet = spreadsheet.sheet1
 ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
-def extrair_cpf(texto):
-    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
-    if match:
-        cpf = re.sub(r'\D', '', match.group())
-        if len(cpf) == 11:
-            return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
+def extrair_cpf(cart):
+    cpfs_encontrados = set()
+    caminhos_possiveis = [
+        ("customer", "document"),
+        ("customer_data", "document"),
+        ("customer_data", "data", "document"),
+        ("customer", "data", "document")
+    ]
+    for caminho in caminhos_possiveis:
+        try:
+            valor = cart
+            for chave in caminho:
+                valor = valor.get(chave, {})
+            if isinstance(valor, str):
+                cpf_limpo = re.sub(r'\D', '', valor)
+                if len(cpf_limpo) == 11:
+                    cpfs_encontrados.add(cpf_limpo)
+        except Exception:
+            continue
+    if not cpfs_encontrados:
+        json_text = json.dumps(cart)
+        matches = re.findall(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', json_text)
+        for match in matches:
+            cpf = re.sub(r'\D', '', match)
+            if len(cpf) == 11:
+                cpfs_encontrados.add(cpf)
+    for cpf in cpfs_encontrados:
+        return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
     return "Não encontrado"
 
-def extrair_telefone(texto):
-    matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
-    for numero in matches:
-        apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
-            return numero
+def extrair_telefone(cart):
+    telefones_encontrados = set()
+    caminhos_possiveis = [
+        ("customer", "phone"),
+        ("customer_data", "phone"),
+        ("customer_data", "data", "phone"),
+        ("customer", "data", "phone")
+    ]
+    for caminho in caminhos_possiveis:
+        try:
+            valor = cart
+            for chave in caminho:
+                valor = valor.get(chave, {})
+            if isinstance(valor, str):
+                digitos = re.sub(r'\D', '', valor)
+                if 10 <= len(digitos) <= 11:
+                    telefones_encontrados.add(digitos)
+        except Exception:
+            continue
+    if not telefones_encontrados:
+        json_text = json.dumps(cart)
+        matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', json_text)
+        for numero in matches:
+            apenas_digitos = re.sub(r'\D', '', numero)
+            if len(apenas_digitos) in [10, 11]:
+                telefones_encontrados.add(apenas_digitos)
+    for tel in telefones_encontrados:
+        return tel
     return ""
 
 def formatar_telefone(numero):
@@ -112,17 +156,12 @@ for cart in carts_data:
 
                 if inicio_hoje <= dt <= limite_abandono:
                     transacoes = cart.get("transactions", {}).get("data", [])
-
-                    # Ignora carrinhos com transação aprovada
                     tem_transacao_aprovada = any(t.get("status") == "paid" for t in transacoes)
                     if tem_transacao_aprovada:
                         print(f"⛔ Carrinho {cart.get('id')} ignorado (transação aprovada).")
                         continue
-
-                    # Se passou por todas as condições acima, adiciona
                     cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                     carrinhos_filtrados.append(cart)
-
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
@@ -136,7 +175,6 @@ for cart in carrinhos_filtrados:
     try:
         cart_id = str(cart.get("id"))
         token = cart.get("token", "")
-
         if cart_id in ids_existentes:
             ignorados += 1
             print(f"⚠️ Carrinho {cart_id} já existe na planilha. Ignorado.")
@@ -146,9 +184,8 @@ for cart in carrinhos_filtrados:
         customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
 
-        cart_json_str = json.dumps(cart)
-        cpf = extrair_cpf(cart_json_str)
-        telefone = extrair_telefone(cart_json_str)
+        cpf = extrair_cpf(cart)
+        telefone = extrair_telefone(cart)
         telefone_formatado = formatar_telefone(telefone)
 
         items_data = cart.get("items", {}).get("data", [])
@@ -177,7 +214,6 @@ for cart in carrinhos_filtrados:
 
         data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
 
-        # Inserir dados no topo da planilha (linha 2)
         sheet.insert_row([
             data_abandono_str,
             cart_id,
