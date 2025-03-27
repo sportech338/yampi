@@ -64,7 +64,6 @@ ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
 def extrair_cpf(cart):
-    cpfs_encontrados = set()
     caminhos_possiveis = [
         ("customer", "document"),
         ("customer_data", "document"),
@@ -77,22 +76,11 @@ def extrair_cpf(cart):
             for chave in caminho:
                 valor = valor.get(chave, {})
             if isinstance(valor, str):
-                cpf_limpo = re.sub(r'\D', '', valor)
-                if len(cpf_limpo) == 11:
-                    cpfs_encontrados.add(cpf_limpo)
+                cpf = re.sub(r'\D', '', valor)
+                if len(cpf) == 11:
+                    return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
         except Exception:
             continue
-
-    if not cpfs_encontrados:
-        json_text = json.dumps(cart)
-        matches = re.findall(r'\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b', json_text)
-        for match in matches:
-            cpf = re.sub(r'\D', '', match)
-            if len(cpf) == 11:
-                cpfs_encontrados.add(cpf)
-
-    for cpf in cpfs_encontrados:
-        return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
     return "Não encontrado"
 
 def extrair_telefone(cart):
@@ -102,33 +90,17 @@ def extrair_telefone(cart):
         ("customer_data", "data", "phone"),
         ("customer", "data", "phone")
     ]
-    numeros = []
-
     for caminho in caminhos_possiveis:
         try:
             valor = cart
             for chave in caminho:
                 valor = valor.get(chave, {})
             if isinstance(valor, str):
-                digitos = re.sub(r'\D', '', valor)
-                if 10 <= len(digitos) <= 11:
-                    numeros.append(digitos)
+                numero = re.sub(r'\D', '', valor)
+                if 10 <= len(numero) <= 11:
+                    return numero
         except Exception:
             continue
-
-    if not numeros:
-        json_text = json.dumps(cart)
-        matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', json_text)
-        for numero in matches:
-            apenas_digitos = re.sub(r'\D', '', numero)
-            if 10 <= len(apenas_digitos) <= 11:
-                numeros.append(apenas_digitos)
-
-    for num in numeros:
-        if len(num) == 11:
-            return num
-    if numeros:
-        return numeros[0]
     return ""
 
 def formatar_telefone(numero):
