@@ -6,6 +6,7 @@ import json
 import re
 from datetime import datetime, timedelta
 import pytz
+import time
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -36,6 +37,13 @@ while True:
     paginated_url = f"{BASE_URL}?page={page}"
     try:
         response = requests.get(paginated_url, headers=headers, timeout=30)
+        
+        # Verificando se o erro 429 foi retornado
+        if response.status_code == 429:
+            print("❌ Limite de requisições atingido. Aguardando 60 segundos...")
+            time.sleep(60)  # Pausa de 60 segundos para evitar o erro 429
+            continue
+        
         response.raise_for_status()
         data = response.json().get("data", [])
         if not data:
@@ -43,6 +51,8 @@ while True:
         carts_data.extend(data)
         print(f"📄 Página {page} carregada com {len(data)} carrinhos.")
         page += 1
+        time.sleep(1)  # Pausa de 1 segundo entre as requisições para evitar atingir o limite
+
     except Exception as e:
         print(f"❌ Erro ao buscar página {page} da Yampi: {e}")
         break
