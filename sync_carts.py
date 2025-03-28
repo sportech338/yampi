@@ -112,17 +112,12 @@ for cart in carts_data:
 
                 if inicio_hoje <= dt <= limite_abandono:
                     transacoes = cart.get("transactions", {}).get("data", [])
-
-                    # Ignora carrinhos com transação aprovada
                     tem_transacao_aprovada = any(t.get("status") == "paid" for t in transacoes)
                     if tem_transacao_aprovada:
                         print(f"⛔ Carrinho {cart.get('id')} ignorado (transação aprovada).")
                         continue
-
-                    # Se passou por todas as condições acima, adiciona
                     cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                     carrinhos_filtrados.append(cart)
-
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
@@ -137,9 +132,14 @@ for cart in carrinhos_filtrados:
         cart_id = str(cart.get("id"))
         token = cart.get("token", "")
 
+        # Se já existe, atualizar a coluna A com a nova data
         if cart_id in ids_existentes:
+            linha_existente = ids_existentes.index(cart_id) + 2  # +2 por causa do cabeçalho
+            nova_data = cart.get("data_atualizacao", "")
+            if nova_data:
+                sheet.update_cell(linha_existente, 1, nova_data)  # Coluna A = 1
+                print(f"🔄 Carrinho {cart_id} já existe. Data atualizada para {nova_data}.")
             ignorados += 1
-            print(f"⚠️ Carrinho {cart_id} já existe na planilha. Ignorado.")
             continue
 
         tracking = cart.get("tracking_data", {})
