@@ -90,14 +90,6 @@ def extrair_telefone(cart):
         pass
     return ""
 
-def formatar_telefone(numero):
-    digitos = re.sub(r'\D', '', numero)
-    if len(digitos) == 11:
-        return f"({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}"
-    elif len(digitos) == 10:
-        return f"({digitos[:2]}) {digitos[2:6]}-{digitos[6:]}"
-    return ""
-
 # Mapeamento das etapas de abandono
 etapas = {
     "personal_data": "🙋‍♂️ Dados pessoais",
@@ -153,10 +145,9 @@ for cart in carrinhos_filtrados:
 
         cpf = extrair_cpf(cart)
         telefone = extrair_telefone(cart)
-        telefone_formatado = formatar_telefone(telefone)
 
         print(f"🧾 CPF extraído: {cpf}")
-        print(f"📞 Telefone extraído: {telefone} | Formatado: {telefone_formatado}")
+        print(f"📞 Telefone extraído: {telefone}")
 
         items_data = cart.get("items", {}).get("data", [])
         if items_data:
@@ -190,7 +181,7 @@ for cart in carrinhos_filtrados:
             customer_name,
             customer_email,
             cpf,
-            telefone_formatado or "Não encontrado",
+            telefone or "Não encontrado",
             product_name,
             quantity,
             total,
