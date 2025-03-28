@@ -17,9 +17,9 @@ DOMINIO_LOJA = "seguro.lojasportech.com"
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
 
-# Limites: carrinhos de hoje e abandonados há pelo menos 20 minutos
+# Limites: carrinhos de hoje e abandonados há pelo menos 10 minutos
 inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
-limite_abandono = agora - timedelta(minutes=20)
+limite_abandono = agora - timedelta(minutes=10)
 
 # URL base da API (sem export)
 BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
