@@ -6,7 +6,6 @@ import json
 import re
 from datetime import datetime, timedelta
 import pytz
-import time
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -18,9 +17,9 @@ DOMINIO_LOJA = "seguro.lojasportech.com"
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
 
-# Limites: carrinhos de hoje e abandonados há pelo menos 10 minutos
+# Limites: carrinhos de hoje e abandonados há pelo menos 20 minutos
 inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
-limite_abandono = agora - timedelta(minutes=10)
+limite_abandono = agora - timedelta(minutes=20)
 
 # URL base da API (sem export)
 BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
@@ -37,13 +36,6 @@ while True:
     paginated_url = f"{BASE_URL}?page={page}"
     try:
         response = requests.get(paginated_url, headers=headers, timeout=30)
-        
-        # Verificando se o erro 429 foi retornado
-        if response.status_code == 429:
-            print("❌ Limite de requisições atingido. Aguardando 60 segundos...")
-            time.sleep(60)  # Pausa de 60 segundos para evitar o erro 429
-            continue
-        
         response.raise_for_status()
         data = response.json().get("data", [])
         if not data:
@@ -51,8 +43,6 @@ while True:
         carts_data.extend(data)
         print(f"📄 Página {page} carregada com {len(data)} carrinhos.")
         page += 1
-        time.sleep(1)  # Pausa de 1 segundo entre as requisições para evitar atingir o limite
-
     except Exception as e:
         print(f"❌ Erro ao buscar página {page} da Yampi: {e}")
         break
@@ -70,45 +60,39 @@ spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
 # Buscar carrinhos já adicionados
-telefones_existentes = [str(row[5]) for row in sheet.get_all_values()[1:] if len(row) > 5 and row[5]]
+ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
 
 # Funções auxiliares
-def extrair_cpf(cart):
-    try:
-        cpf = cart.get("customer", {}).get("data", {}).get("cpf")
-        if isinstance(cpf, str):
-            cpf = re.sub(r'\D', '', cpf)
-            if len(cpf) == 11:
-                return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
-    except Exception:
-        pass
+def extrair_cpf(texto):
+    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
+    if match:
+        cpf = re.sub(r'\D', '', match.group())
+        if len(cpf) == 11:
+            return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
     return "Não encontrado"
 
-def extrair_telefone(cart):
-    try:
-        telefone = cart.get("customer", {}).get("data", {}).get("phone", {}).get("full_number")
-        if telefone:
-            telefone = re.sub(r'\D', '', telefone)
-        else:
-            telefone = cart.get("spreadsheet", {}).get("data", {}).get("customer_phone", "")
-            telefone = re.sub(r'\D', '', telefone)
-
-        if not telefone:
-            return ""
-
-        if len(telefone) == 10 and telefone[2] == '9':
-            telefone = telefone[:2] + '9' + telefone[2:]
-
-        return f"0{telefone}"
-    except Exception:
-        return ""
+def extrair_telefone(texto):
+    matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
+    for numero in matches:
+        apenas_digitos = re.sub(r'\D', '', numero)
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
+            ddd = apenas_digitos[:2]
+            telefone = apenas_digitos[2:]
+            if len(telefone) == 8:
+                telefone = '9' + telefone
+            numero_formatado = f"0{ddd}{telefone}"
+            # Validação: ignora números compostos por dígitos repetidos
+            if numero_formatado.count(numero_formatado[1]) == len(numero_formatado) - 1:
+                return ""
+            return numero_formatado
+    return ""
 
 # Mapeamento das etapas de abandono
 etapas = {
-    "personal_data": "👤 Dados pessoais",
-    "shipping": "🚞 Entrega",
-    "shippment": "🚞 Entrega",
-    "entrega": "🚞 Entrega",
+    "personal_data": "🙋‍♂️ Dados pessoais",
+    "shipping": "📦 Entrega",
+    "shippment": "📦 Entrega",
+    "entrega": "📦 Entrega",
     "payment": "💳 Pagamento",
     "pagamento": "💳 Pagamento"
 }
@@ -128,13 +112,99 @@ for cart in carts_data:
 
                 if inicio_hoje <= dt <= limite_abandono:
                     transacoes = cart.get("transactions", {}).get("data", [])
+
+                    # Ignora carrinhos com transação aprovada
                     tem_transacao_aprovada = any(t.get("status") == "paid" for t in transacoes)
                     if tem_transacao_aprovada:
                         print(f"⛔ Carrinho {cart.get('id')} ignorado (transação aprovada).")
                         continue
+
+                    # Se passou por todas as condições acima, adiciona
                     cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                     carrinhos_filtrados.append(cart)
+
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
-print(f"🧲 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
+print(f"🧮 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
+
+# Enviar para planilha
+adicionados = 0
+ignorados = 0
+
+for cart in carrinhos_filtrados:
+    try:
+        cart_id = str(cart.get("id"))
+        token = cart.get("token", "")
+
+        if cart_id in ids_existentes:
+            ignorados += 1
+            print(f"⚠️ Carrinho {cart_id} já existe na planilha. Ignorado.")
+            continue
+
+        tracking = cart.get("tracking_data", {})
+        customer_name = tracking.get("name", "Desconhecido")
+        customer_email = tracking.get("email", "Sem email")
+
+        cart_json_str = json.dumps(cart)
+        cpf = extrair_cpf(cart_json_str)
+        telefone = extrair_telefone(cart_json_str)
+
+        items_data = cart.get("items", {}).get("data", [])
+        if items_data:
+            first_item = items_data[0]
+            product_name = first_item.get("sku", {}).get("data", {}).get("title", "Sem título")
+            quantity = first_item.get("quantity", 1)
+        else:
+            product_name = "Sem produto"
+            quantity = 0
+
+        total = cart.get("totalizers", {}).get("total", 0)
+        link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
+
+        abandonou_em = "🙋‍♂️ Dados pessoais"
+        for origem in [
+            cart.get("abandoned_step"),
+            cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
+            cart.get("search", {}).get("data", {}).get("abandoned_step")
+        ]:
+            if origem:
+                etapa = etapas.get(origem.strip().lower())
+                if etapa and etapa in ["📦 Entrega", "💳 Pagamento"]:
+                    abandonou_em = etapa
+                    break
+
+        data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
+
+        # Inserir dados no topo da planilha (linha 2)
+        sheet.insert_row([
+            data_abandono_str,
+            cart_id,
+            customer_name,
+            customer_email,
+            cpf,
+            telefone or "Não encontrado",
+            product_name,
+            quantity,
+            total,
+            abandonou_em,
+            link_checkout
+        ], index=2)
+
+        print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
+        adicionados += 1
+
+    except Exception as e:
+        print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
+
+# Logs
+try:
+    aba_logs = spreadsheet.worksheet("Logs")
+except gspread.exceptions.WorksheetNotFound:
+    aba_logs = spreadsheet.add_worksheet(title="Logs", rows="1000", cols="5")
+    aba_logs.append_row(["Data", "Total do dia", "Adicionados", "Ignorados", "Erro?"])
+
+data_execucao = agora.strftime("%d/%m/%Y %H:%M")
+houve_erro = "Não" if adicionados > 0 else "Sim"
+
+aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
