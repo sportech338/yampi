@@ -17,9 +17,9 @@ DOMINIO_LOJA = "seguro.lojasportech.com"
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
 
-# Limites: carrinhos de hoje e abandonados há pelo menos 15 minutos
+# Limites: carrinhos de hoje e abandonados há pelo menos 20 minutos
 inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
-limite_abandono = agora - timedelta(minutes=15)
+limite_abandono = agora - timedelta(minutes=20)
 
 # URL base da API (sem export)
 BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
@@ -60,7 +60,7 @@ spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
 # Buscar carrinhos já adicionados
-ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
+telefones_existentes = [str(row[5]) for row in sheet.get_all_values()[1:] if len(row) > 5 and row[5]]
 
 # Funções auxiliares
 def extrair_cpf(cart):
@@ -79,23 +79,26 @@ def extrair_telefone(cart):
         telefone = cart.get("customer", {}).get("data", {}).get("phone", {}).get("full_number")
         if telefone:
             telefone = re.sub(r'\D', '', telefone)
-            if 10 <= len(telefone) <= 11:
-                return telefone
-        telefone_alt = cart.get("spreadsheet", {}).get("data", {}).get("customer_phone")
-        if telefone_alt:
-            telefone_alt = re.sub(r'\D', '', telefone_alt)
-            if 10 <= len(telefone_alt) <= 11:
-                return telefone_alt
+        else:
+            telefone = cart.get("spreadsheet", {}).get("data", {}).get("customer_phone", "")
+            telefone = re.sub(r'\D', '', telefone)
+
+        if not telefone:
+            return ""
+
+        if len(telefone) == 10 and telefone[2] == '9':
+            telefone = telefone[:2] + '9' + telefone[2:]
+
+        return f"0{telefone}"
     except Exception:
-        pass
-    return ""
+        return ""
 
 # Mapeamento das etapas de abandono
 etapas = {
-    "personal_data": "🙋‍♂️ Dados pessoais",
-    "shipping": "📦 Entrega",
-    "shippment": "📦 Entrega",
-    "entrega": "📦 Entrega",
+    "personal_data": "👤 Dados pessoais",
+    "shipping": "🚞 Entrega",
+    "shippment": "🚞 Entrega",
+    "entrega": "🚞 Entrega",
     "payment": "💳 Pagamento",
     "pagamento": "💳 Pagamento"
 }
@@ -124,85 +127,4 @@ for cart in carts_data:
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
-print(f"🧮 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
-
-# Enviar para planilha
-adicionados = 0
-ignorados = 0
-
-for cart in carrinhos_filtrados:
-    try:
-        cart_id = str(cart.get("id"))
-        token = cart.get("token", "")
-        if cart_id in ids_existentes:
-            ignorados += 1
-            print(f"⚠️ Carrinho {cart_id} já existe na planilha. Ignorado.")
-            continue
-
-        tracking = cart.get("tracking_data", {})
-        customer_name = tracking.get("name", "Desconhecido")
-        customer_email = tracking.get("email", "Sem email")
-
-        cpf = extrair_cpf(cart)
-        telefone = extrair_telefone(cart)
-
-        print(f"🧾 CPF extraído: {cpf}")
-        print(f"📞 Telefone extraído: {telefone}")
-
-        items_data = cart.get("items", {}).get("data", [])
-        if items_data:
-            first_item = items_data[0]
-            product_name = first_item.get("sku", {}).get("data", {}).get("title", "Sem título")
-            quantity = first_item.get("quantity", 1)
-        else:
-            product_name = "Sem produto"
-            quantity = 0
-
-        total = cart.get("totalizers", {}).get("total", 0)
-        link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
-
-        abandonou_em = "🙋‍♂️ Dados pessoais"
-        for origem in [
-            cart.get("abandoned_step"),
-            cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
-            cart.get("search", {}).get("data", {}).get("abandoned_step")
-        ]:
-            if origem:
-                etapa = etapas.get(origem.strip().lower())
-                if etapa and etapa in ["📦 Entrega", "💳 Pagamento"]:
-                    abandonou_em = etapa
-                    break
-
-        data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
-
-        sheet.insert_row([
-            data_abandono_str,
-            cart_id,
-            customer_name,
-            customer_email,
-            cpf,
-            telefone or "Não encontrado",
-            product_name,
-            quantity,
-            total,
-            abandonou_em,
-            link_checkout
-        ], index=2)
-
-        print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
-        adicionados += 1
-
-    except Exception as e:
-        print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
-
-# Logs
-try:
-    aba_logs = spreadsheet.worksheet("Logs")
-except gspread.exceptions.WorksheetNotFound:
-    aba_logs = spreadsheet.add_worksheet(title="Logs", rows="1000", cols="5")
-    aba_logs.append_row(["Data", "Total do dia", "Adicionados", "Ignorados", "Erro?"])
-
-data_execucao = agora.strftime("%d/%m/%Y %H:%M")
-houve_erro = "Não" if adicionados > 0 else "Sim"
-
-aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
+print(f"🧲 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
