@@ -12,16 +12,17 @@ ALIAS = "sportech"
 TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 DOMINIO_LOJA = "seguro.lojasportech.com"
+SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
+MINUTOS_ATE_CONSIDERAR_ABANDONO = 12
 
 # Fuso horário de São Paulo
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
 
-# Limites: carrinhos de hoje e abandonados há pelo menos 12 minutos
 inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
-limite_abandono = agora - timedelta(minutes=12)
+limite_abandono = agora - timedelta(minutes=MINUTOS_ATE_CONSIDERAR_ABANDONO)
 
-# URL base da API (sem export)
+# URL base da API
 BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/checkout/carts"
 headers = {
     "User-token": TOKEN,
@@ -29,7 +30,7 @@ headers = {
     "Accept": "application/json"
 }
 
-# Paginação: busca todas as páginas de carrinhos
+# Paginação
 carts_data = []
 page = 1
 while True:
@@ -47,22 +48,19 @@ while True:
         print(f"❌ Erro ao buscar página {page} da Yampi: {e}")
         break
 
-# Autenticação com Google Sheets
+# Google Sheets
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 credentials_dict = json.loads(creds_json)
 credentials = Credentials.from_service_account_info(credentials_dict, scopes=scope)
 client = gspread.authorize(credentials)
-
-# Planilha
-SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Buscar carrinhos já adicionados
+# Carrinhos já adicionados
 ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
 
-# Funções auxiliares
+# Auxiliares
 def extrair_cpf(texto):
     match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
     if match:
@@ -81,13 +79,12 @@ def extrair_telefone(texto):
             if len(telefone) == 8:
                 telefone = '9' + telefone
             numero_formatado = f"0{ddd}{telefone}"
-            # Validação: ignora números compostos por dígitos repetidos
             if numero_formatado.count(numero_formatado[1]) == len(numero_formatado) - 1:
                 return ""
             return numero_formatado
     return ""
 
-# Mapeamento das etapas de abandono
+# Mapeamento das etapas
 etapas = {
     "personal_data": "🙋‍♂️ Dados pessoais",
     "shipping": "📦 Entrega",
@@ -112,8 +109,7 @@ for cart in carts_data:
 
                 if inicio_hoje <= dt <= limite_abandono:
                     transacoes = cart.get("transactions", {}).get("data", [])
-                    tem_transacao_aprovada = any(t.get("status") == "paid" for t in transacoes)
-                    if tem_transacao_aprovada:
+                    if any(t.get("status") == "paid" for t in transacoes):
                         print(f"⛔ Carrinho {cart.get('id')} ignorado (transação aprovada).")
                         continue
                     cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
@@ -123,7 +119,8 @@ for cart in carts_data:
 
 print(f"🧮 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
 
-# Enviar para planilha
+# Enviar em lote para planilha
+linhas_para_inserir = []
 adicionados = 0
 ignorados = 0
 
@@ -132,12 +129,11 @@ for cart in carrinhos_filtrados:
         cart_id = str(cart.get("id"))
         token = cart.get("token", "")
 
-        # Se já existe, atualizar a coluna A com a nova data
         if cart_id in ids_existentes:
-            linha_existente = ids_existentes.index(cart_id) + 2  # +2 por causa do cabeçalho
+            linha_existente = ids_existentes.index(cart_id) + 2
             nova_data = cart.get("data_atualizacao", "")
             if nova_data:
-                sheet.update_cell(linha_existente, 1, nova_data)  # Coluna A = 1
+                sheet.update_cell(linha_existente, 1, nova_data)
                 print(f"🔄 Carrinho {cart_id} já existe. Data atualizada para {nova_data}.")
             ignorados += 1
             continue
@@ -170,14 +166,13 @@ for cart in carrinhos_filtrados:
         ]:
             if origem:
                 etapa = etapas.get(origem.strip().lower())
-                if etapa and etapa in ["📦 Entrega", "💳 Pagamento"]:
+                if etapa in ["📦 Entrega", "💳 Pagamento"]:
                     abandonou_em = etapa
                     break
 
         data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
 
-        # Inserir dados no topo da planilha (linha 2)
-        sheet.insert_row([
+        linhas_para_inserir.append([
             data_abandono_str,
             cart_id,
             customer_name,
@@ -189,13 +184,16 @@ for cart in carrinhos_filtrados:
             total,
             abandonou_em,
             link_checkout
-        ], index=2)
-
-        print(f"✅ Carrinho {cart_id} adicionado com sucesso.")
+        ])
         adicionados += 1
 
     except Exception as e:
         print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
+
+# Inserir todas as linhas de uma vez (no topo)
+if linhas_para_inserir:
+    sheet.insert_rows(linhas_para_inserir, row=2)
+    print(f"✅ {adicionados} carrinhos adicionados em lote com sucesso.")
 
 # Logs
 try:
@@ -206,5 +204,4 @@ except gspread.exceptions.WorksheetNotFound:
 
 data_execucao = agora.strftime("%d/%m/%Y %H:%M")
 houve_erro = "Não" if adicionados > 0 else "Sim"
-
 aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
