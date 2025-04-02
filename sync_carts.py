@@ -57,18 +57,11 @@ client = gspread.authorize(credentials)
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Carrinhos já adicionados
-ids_existentes = [str(row[1]) for row in sheet.get_all_values()[1:] if row]
+# Verificação com base no LINK CHECKOUT (coluna 14)
+valores_planilha = sheet.get_all_values()[1:]
+links_existentes = {linha[13] for linha in valores_planilha if len(linha) >= 14}
 
 # Auxiliares
-def extrair_cpf(texto):
-    match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', texto)
-    if match:
-        cpf = re.sub(r'\D', '', match.group())
-        if len(cpf) == 11:
-            return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
-    return "Não encontrado"
-
 def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
@@ -126,15 +119,10 @@ ignorados = 0
 
 for cart in carrinhos_filtrados:
     try:
-        cart_id = str(cart.get("id"))
         token = cart.get("token", "")
+        link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        if cart_id in ids_existentes:
-            linha_existente = ids_existentes.index(cart_id) + 2
-            nova_data = cart.get("data_atualizacao", "")
-            if nova_data:
-                sheet.update_cell(linha_existente, 1, nova_data)
-                print(f"🔄 Carrinho {cart_id} já existe. Data atualizada para {nova_data}.")
+        if link_checkout in links_existentes:
             ignorados += 1
             continue
 
@@ -143,7 +131,6 @@ for cart in carrinhos_filtrados:
         customer_email = tracking.get("email", "Sem email")
 
         cart_json_str = json.dumps(cart)
-        cpf = extrair_cpf(cart_json_str)
         telefone = extrair_telefone(cart_json_str)
 
         items_data = cart.get("items", {}).get("data", [])
@@ -156,7 +143,6 @@ for cart in carrinhos_filtrados:
             quantity = 0
 
         total = cart.get("totalizers", {}).get("total", 0)
-        link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
         abandonou_em = "🙋‍♂️ Dados pessoais"
         for origem in [
@@ -172,18 +158,20 @@ for cart in carrinhos_filtrados:
 
         data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
 
+        # Linha para inserir (15 colunas)
         linhas_para_inserir.append([
-            data_abandono_str,
-            cart_id,
-            customer_name,
-            customer_email,
-            cpf,
-            telefone or "Não encontrado",
-            product_name,
-            quantity,
-            total,
-            abandonou_em,
-            link_checkout
+            data_abandono_str,           # DATA DE ATUALIZAÇÃO
+            "Carrinho abandonado",       # ORIGEM
+            customer_name,               # NOME
+            customer_email,              # EMAIL
+            telefone or "Não encontrado",# TELEFONE
+            product_name,                # NOME DO PRODUTO
+            quantity,                    # QUANTIDADE
+            total,                       # VALOR
+            abandonou_em,                # ABANDONOU EM
+            "", "", "", "",              # STATUS, ETAPA, LIGAÇÕES, ANOTAÇÕES
+            link_checkout,               # LINK CHECKOUT
+            ""                           # LINK WHATSAPP
         ])
         adicionados += 1
 
