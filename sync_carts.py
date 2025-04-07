@@ -160,27 +160,28 @@ for cart in carrinhos_filtrados:
 
         # Linha para inserir (15 colunas)
         linhas_para_inserir.append([
-            data_abandono_str,           # DATA DE ATUALIZAÇÃO
-            "Carrinho abandonado",       # ORIGEM
-            customer_name,               # NOME
-            customer_email,              # EMAIL
-            telefone or "Não encontrado",# TELEFONE
-            product_name,                # NOME DO PRODUTO
-            quantity,                    # QUANTIDADE
-            total,                       # VALOR
-            abandonou_em,                # ABANDONOU EM
-            "", "", "", "",              # STATUS, ETAPA, LIGAÇÕES, ANOTAÇÕES
-            link_checkout,               # LINK CHECKOUT
-            ""                           # LINK WHATSAPP
+            data_abandono_str,
+            "Carrinho abandonado",
+            customer_name,
+            customer_email,
+            telefone or "Não encontrado",
+            product_name,
+            quantity,
+            total,
+            abandonou_em,
+            "", "", "", "",
+            link_checkout,
+            ""
         ])
         adicionados += 1
 
     except Exception as e:
         print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
 
-# Inserir todas as linhas de uma vez (no topo)
+# Inserir todas as linhas no final da planilha
 if linhas_para_inserir:
-    sheet.insert_rows(linhas_para_inserir, row=2)
+    ultima_linha = len(valores_planilha) + 2  # +2 para considerar o cabeçalho e ir para a próxima linha vazia
+    sheet.insert_rows(linhas_para_inserir, row=ultima_linha)
     print(f"✅ {adicionados} carrinhos adicionados em lote com sucesso.")
 
 # Logs
