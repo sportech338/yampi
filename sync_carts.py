@@ -48,19 +48,18 @@ while True:
         break
 
 # Google Sheets
+descoped_credentials = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-credentials_dict = json.loads(creds_json)
-credentials = Credentials.from_service_account_info(credentials_dict, scopes=scope)
+credentials = Credentials.from_service_account_info(descoped_credentials, scopes=scope)
 client = gspread.authorize(credentials)
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Verifica nomes já existentes com base na COLUNA D (índice 3)
+# Verifica nomes já existentes com base na COLUNA D (nome do cliente)
 valores_planilha = sheet.get_all_values()[1:]
 nomes_existentes = {linha[3].strip().lower() for linha in valores_planilha if len(linha) >= 4}
 
-# Função auxiliar
+# Função auxiliar para extrair telefone
 def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
@@ -76,12 +75,12 @@ def extrair_telefone(texto):
             return numero_formatado
     return ""
 
-# Mapeamento de etapas
+# Etapas
 etapas = {
-    "personal_data": "🙋‍♂️ Dados pessoais",
-    "shipping": "🚞 Entrega",
-    "shippment": "🚞 Entrega",
-    "entrega": "🚞 Entrega",
+    "personal_data": "🧛‍♂️ Dados pessoais",
+    "shipping": "🚎 Entrega",
+    "shippment": "🚎 Entrega",
+    "entrega": "🚎 Entrega",
     "payment": "💳 Pagamento",
     "pagamento": "💳 Pagamento"
 }
@@ -141,7 +140,7 @@ for cart in carrinhos_filtrados:
 
         total = cart.get("totalizers", {}).get("total", 0)
 
-        abandonou_em = "🙋‍♂️ Dados pessoais"
+        abandonou_em = "🧛‍♂️ Dados pessoais"
         for origem in [
             cart.get("abandoned_step"),
             cart.get("spreadsheet", {}).get("data", {}).get("abandoned_step"),
@@ -149,7 +148,7 @@ for cart in carrinhos_filtrados:
         ]:
             if origem:
                 etapa = etapas.get(origem.strip().lower())
-                if etapa in ["🚞 Entrega", "💳 Pagamento"]:
+                if etapa in ["🚎 Entrega", "💳 Pagamento"]:
                     abandonou_em = etapa
                     break
 
@@ -169,6 +168,7 @@ if linhas_para_inserir:
     sheet.insert_rows(linhas_para_inserir, row=2)
     print(f"✅ {adicionados} carrinhos adicionados em lote com sucesso.")
 
+# Logs
 try:
     aba_logs = spreadsheet.worksheet("Logs")
 except gspread.exceptions.WorksheetNotFound:
@@ -178,3 +178,13 @@ except gspread.exceptions.WorksheetNotFound:
 data_execucao = agora.strftime("%d/%m/%Y %H:%M")
 houve_erro = "Não" if adicionados > 0 else "Sim"
 aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
+
+print(f"""
+📜 LOG DE EXECUÇÃO
+
+📅 Data de execução: {data_execucao}
+📦 Carrinhos filtrados: {len(carrinhos_filtrados)}
+✅ Carrinhos adicionados: {adicionados}
+🔀 Carrinhos ignorados (já estavam na planilha): {ignorados}
+❗ Houve erro? {houve_erro}
+""")
