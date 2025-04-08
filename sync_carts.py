@@ -57,16 +57,17 @@ client = gspread.authorize(credentials)
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Verificação com base no LINK CHECKOUT (coluna 14)
+# Verifica carrinhos já existentes com base no LINK CHECKOUT (coluna 15)
 valores_planilha = sheet.get_all_values()[1:]
-links_existentes = {linha[13] for linha in valores_planilha if len(linha) >= 14}
+links_existentes = {linha[14] for linha in valores_planilha if len(linha) >= 15}
 
-# Auxiliares
+# Função auxiliar
+
 def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
         apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?.?\d{3}\.?.?\d{3}-?\d{2}', numero):
             ddd = apenas_digitos[:2]
             telefone = apenas_digitos[2:]
             if len(telefone) == 8:
@@ -77,17 +78,16 @@ def extrair_telefone(texto):
             return numero_formatado
     return ""
 
-# Mapeamento das etapas
+# Mapeamento de etapas
 etapas = {
     "personal_data": "🙋‍♂️ Dados pessoais",
-    "shipping": "📦 Entrega",
-    "shippment": "📦 Entrega",
-    "entrega": "📦 Entrega",
+    "shipping": "🚞 Entrega",
+    "shippment": "🚞 Entrega",
+    "entrega": "🚞 Entrega",
     "payment": "💳 Pagamento",
     "pagamento": "💳 Pagamento"
 }
 
-# Filtrar carrinhos válidos
 carrinhos_filtrados = []
 for cart in carts_data:
     updated_at = cart.get("updated_at")
@@ -110,9 +110,8 @@ for cart in carts_data:
             except Exception as e:
                 print(f"⚠️ Erro ao converter data do carrinho {cart.get('id')}: {e}")
 
-print(f"🧮 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
+print(f"🧲 Carrinhos filtrados prontos para planilha: {len(carrinhos_filtrados)}")
 
-# Enviar em lote para planilha
 linhas_para_inserir = []
 adicionados = 0
 ignorados = 0
@@ -152,33 +151,33 @@ for cart in carrinhos_filtrados:
         ]:
             if origem:
                 etapa = etapas.get(origem.strip().lower())
-                if etapa in ["📦 Entrega", "💳 Pagamento"]:
+                if etapa in ["🚞 Entrega", "💳 Pagamento"]:
                     abandonou_em = etapa
                     break
 
         data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
 
-        # Linha para inserir (15 colunas)
         linhas_para_inserir.append([
-            data_abandono_str,           # DATA DE ATUALIZAÇÃO
-            "Carrinho abandonado",       # ORIGEM
-            customer_name,               # NOME
-            customer_email,              # EMAIL
-            telefone or "Não encontrado",# TELEFONE
-            product_name,                # NOME DO PRODUTO
-            quantity,                    # QUANTIDADE
-            total,                       # VALOR
-            abandonou_em,                # ABANDONOU EM
-            "", "", "", "",              # STATUS, ETAPA, LIGAÇÕES, ANOTAÇÕES
-            link_checkout,               # LINK CHECKOUT
-            ""                           # LINK WHATSAPP
+            data_abandono_str,   # DATA INICIAL
+            "",                  # DATA ATUALIZADA
+            "Carrinho abandonado",  # ORIGEM
+            customer_name,
+            customer_email,
+            telefone or "Não encontrado",
+            product_name,
+            quantity,
+            total,
+            abandonou_em,
+            "", "", "", "",      # STATUS, ETAPA, LIGAÇÕES, ANOTAÇÕES
+            link_checkout,
+            ""                   # WHATSAPP
         ])
         adicionados += 1
 
     except Exception as e:
         print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
 
-# Inserir todas as linhas de uma vez (no topo)
+# Inserção em lote na planilha
 if linhas_para_inserir:
     sheet.insert_rows(linhas_para_inserir, row=2)
     print(f"✅ {adicionados} carrinhos adicionados em lote com sucesso.")
