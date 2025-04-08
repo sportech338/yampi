@@ -18,7 +18,6 @@ MINUTOS_ATE_CONSIDERAR_ABANDONO = 12
 # Fuso horário de São Paulo
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
-
 inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
 limite_abandono = agora - timedelta(minutes=MINUTOS_ATE_CONSIDERAR_ABANDONO)
 
@@ -57,17 +56,16 @@ client = gspread.authorize(credentials)
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Verifica carrinhos já existentes com base no LINK CHECKOUT (coluna 15)
+# Verifica nomes já existentes com base na COLUNA D (índice 3)
 valores_planilha = sheet.get_all_values()[1:]
-links_existentes = {linha[14] for linha in valores_planilha if len(linha) >= 15}
+nomes_existentes = {linha[3].strip().lower() for linha in valores_planilha if len(linha) >= 4}
 
 # Função auxiliar
-
 def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
     for numero in matches:
         apenas_digitos = re.sub(r'\D', '', numero)
-        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?.?\d{3}\.?.?\d{3}-?\d{2}', numero):
+        if len(apenas_digitos) in [10, 11] and not re.match(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', numero):
             ddd = apenas_digitos[:2]
             telefone = apenas_digitos[2:]
             if len(telefone) == 8:
@@ -99,7 +97,6 @@ for cart in carts_data:
                     dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S.%f"))
                 except ValueError:
                     dt = tz.localize(datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S"))
-
                 if inicio_hoje <= dt <= limite_abandono:
                     transacoes = cart.get("transactions", {}).get("data", [])
                     if any(t.get("status") == "paid" for t in transacoes):
@@ -121,14 +118,15 @@ for cart in carrinhos_filtrados:
         token = cart.get("token", "")
         link_checkout = f"https://{DOMINIO_LOJA}/cart?cart_token={token}" if token else "Não encontrado"
 
-        if link_checkout in links_existentes:
+        tracking = cart.get("tracking_data", {})
+        customer_name = tracking.get("name", "Desconhecido")
+        nome_normalizado = customer_name.strip().lower()
+
+        if nome_normalizado in nomes_existentes:
             ignorados += 1
             continue
 
-        tracking = cart.get("tracking_data", {})
-        customer_name = tracking.get("name", "Desconhecido")
         customer_email = tracking.get("email", "Sem email")
-
         cart_json_str = json.dumps(cart)
         telefone = extrair_telefone(cart_json_str)
 
@@ -158,31 +156,19 @@ for cart in carrinhos_filtrados:
         data_abandono_str = cart.get("data_atualizacao", "Não encontrado")
 
         linhas_para_inserir.append([
-            data_abandono_str,   # DATA INICIAL
-            "",                  # DATA ATUALIZADA
-            "Carrinho abandonado",  # ORIGEM
-            customer_name,
-            customer_email,
-            telefone or "Não encontrado",
-            product_name,
-            quantity,
-            total,
-            abandonou_em,
-            "", "", "", "",      # STATUS, ETAPA, LIGAÇÕES, ANOTAÇÕES
-            link_checkout,
-            ""                   # WHATSAPP
+            data_abandono_str, "", "Carrinho abandonado", customer_name,
+            customer_email, telefone or "Não encontrado", product_name,
+            quantity, total, abandonou_em, "", "", "", "", link_checkout, ""
         ])
         adicionados += 1
 
     except Exception as e:
         print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
 
-# Inserção em lote na planilha
 if linhas_para_inserir:
     sheet.insert_rows(linhas_para_inserir, row=2)
     print(f"✅ {adicionados} carrinhos adicionados em lote com sucesso.")
 
-# Logs
 try:
     aba_logs = spreadsheet.worksheet("Logs")
 except gspread.exceptions.WorksheetNotFound:
