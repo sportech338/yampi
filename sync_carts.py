@@ -13,7 +13,7 @@ TOKEN = os.getenv("YAMPI_API_TOKEN")
 SECRET_KEY = os.getenv("YAMPI_SECRET_KEY")
 DOMINIO_LOJA = "seguro.lojasportech.com"
 SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
-MINUTOS_ATE_CONSIDERAR_ABANDONO = 12
+MINUTOS_ATE_CONSIDERAR_ABANDONO = 20
 
 # Fuso horário
 tz = pytz.timezone("America/Sao_Paulo")
