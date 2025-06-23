@@ -1,30 +1,29 @@
-name: Rodar pedidos cancelados diariamente
+name: Sync Cancelados from Yampi to Google Sheets
 
 on:
   schedule:
-    - cron: '0 12 * * *' # Executa todo dia às 9h da manhã (horário de Brasília)
-  workflow_dispatch: # permite rodar manualmente também
+    - cron: '15 12 * * *'  # Executa todo dia às 09:15 da manhã (horário de Brasília)
+  workflow_dispatch:  # Permite execução manual
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Clonar repositório
+      - name: Checkout do repositório
         uses: actions/checkout@v3
 
       - name: Configurar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
       - name: Instalar dependências
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
-      - name: Rodar script
+      - name: Rodar o script de cancelados
         env:
           YAMPI_API_TOKEN: ${{ secrets.YAMPI_API_TOKEN }}
           YAMPI_SECRET_KEY: ${{ secrets.YAMPI_SECRET_KEY }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-        run: |
-          python seu_arquivo.py
+        run: python sync_cancelados.py
