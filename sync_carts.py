@@ -6,8 +6,6 @@ import json
 import re
 from datetime import datetime, timedelta
 import pytz
-import time
-import traceback
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -31,7 +29,7 @@ headers = {
     "Accept": "application/json"
 }
 
-# Paginação de carrinhos
+# Paginação
 carts_data = []
 page = 1
 while True:
@@ -45,7 +43,6 @@ while True:
         carts_data.extend(data)
         print(f"📄 Página {page} carregada com {len(data)} carrinhos.")
         page += 1
-        time.sleep(1)
     except Exception as e:
         print(f"❌ Erro ao buscar página {page} da Yampi: {e}")
         break
@@ -58,9 +55,9 @@ client = gspread.authorize(credentials)
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Dados existentes para deduplicar (por email)
+# Nomes existentes (COLUNA D = índice 3)
 valores_planilha = sheet.get_all_values()[1:]
-emails_existentes = {linha[4].strip().lower() for linha in valores_planilha if len(linha) >= 5}
+nomes_existentes = {linha[3].strip().lower() for linha in valores_planilha if len(linha) >= 4}
 
 def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
@@ -86,7 +83,7 @@ etapas = {
     "pagamento": "💳 Pagamento"
 }
 
-# Filtrar carrinhos
+# Processar carrinhos
 carrinhos_filtrados = []
 for cart in carts_data:
     try:
@@ -96,49 +93,21 @@ for cart in carts_data:
                 dt = tz.localize(datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S.%f"))
             except:
                 dt = tz.localize(datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S"))
+
             if inicio_hoje <= dt <= limite_abandono:
                 if any(t.get("status") == "paid" for t in cart.get("transactions", {}).get("data", [])):
                     continue
                 cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                 carrinhos_filtrados.append(cart)
     except Exception as e:
-        print(f"⚠️ Erro ao processar data: {traceback.format_exc()}")
+        print(f"⚠️ Erro ao processar data: {e}")
 
-# Coletar pedidos cancelados
-orders_cancelados = []
-page = 1
-while True:
-    url = f"https://api.dooki.com.br/v2/{ALIAS}/orders?status=cancelled&page={page}"
-    try:
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        data = response.json().get("data", [])
-        if not data:
-            break
-        for order in data:
-            updated_at = order.get("updated_at", {}).get("date")
-            if updated_at:
-                try:
-                    dt = tz.localize(datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S.%f"))
-                except:
-                    dt = tz.localize(datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S"))
-                if inicio_hoje <= dt <= agora:
-                    order["data_cancelamento"] = dt.strftime("%d/%m/%Y %H:%M")
-                    orders_cancelados.append(order)
-        print(f"📄 Página {page} de pedidos cancelados carregada.")
-        page += 1
-        time.sleep(1)
-    except Exception as e:
-        print(f"❌ Erro ao buscar pedidos cancelados página {page}: {e}")
-        break
-
-# Inserir dados na planilha
+# Inserção
 linhas_para_inserir = []
 adicionados = 0
 ignorados = 0
 houve_erro_real = False
 
-# Carrinhos abandonados
 for cart in carrinhos_filtrados:
     try:
         token = cart.get("token", "")
@@ -146,12 +115,13 @@ for cart in carrinhos_filtrados:
 
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido").strip()
-        email = tracking.get("email", "Sem email").strip().lower()
+        nome_normalizado = customer_name.lower()
 
-        if email in emails_existentes:
+        if nome_normalizado in nomes_existentes:
             ignorados += 1
             continue
 
+        email = tracking.get("email", "Sem email")
         telefone = extrair_telefone(json.dumps(cart))
         items = cart.get("items", {}).get("data", [])
         item = items[0] if items else {}
@@ -179,39 +149,11 @@ for cart in carrinhos_filtrados:
 
     except Exception as e:
         houve_erro_real = True
-        print(f"❌ Erro ao processar carrinho {cart.get('id')}: {traceback.format_exc()}")
+        print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
 
-# Pedidos cancelados
-for order in orders_cancelados:
-    try:
-        nome = order.get("customer", {}).get("name", "Desconhecido")
-        email = order.get("customer", {}).get("email", "Sem email").strip().lower()
-
-        if email in emails_existentes:
-            ignorados += 1
-            continue
-
-        telefone = extrair_telefone(json.dumps(order))
-        item = order.get("items", [{}])[0]
-        produto = item.get("title", "Sem título")
-        qtd = item.get("quantity", 1)
-        total = order.get("total", 0)
-
-        linhas_para_inserir.append([
-            order.get("data_cancelamento", ""), "", "Pedido cancelado", nome,
-            email, telefone or "Não encontrado", produto,
-            qtd, total, "❌ Cancelado", "", "", "", "", "", ""
-        ])
-        adicionados += 1
-
-    except Exception as e:
-        houve_erro_real = True
-        print(f"❌ Erro ao processar pedido cancelado {order.get('id')}: {traceback.format_exc()}")
-
-# Inserir na planilha
 if linhas_para_inserir:
     sheet.insert_rows(linhas_para_inserir, row=2)
-    print(f"✅ {adicionados} linhas adicionadas.")
+    print(f"✅ {adicionados} carrinhos adicionados.")
 
 # Logs
 try:
@@ -223,17 +165,15 @@ except gspread.exceptions.WorksheetNotFound:
 data_execucao = agora.strftime("%d/%m/%Y %H:%M")
 houve_erro = "Sim" if houve_erro_real else "Não"
 
-total_do_dia = len(carrinhos_filtrados) + len(orders_cancelados)
-aba_logs.append_row([data_execucao, total_do_dia, adicionados, ignorados, houve_erro])
+aba_logs.append_row([data_execucao, len(carrinhos_filtrados), adicionados, ignorados, houve_erro])
 
 # Print final
 print(f"""
 📜 LOG DE EXECUÇÃO
 
-🗓️ Data de execução: {data_execucao}
+📅 Data de execução: {data_execucao}
 📦 Carrinhos filtrados: {len(carrinhos_filtrados)}
-📦 Pedidos cancelados: {len(orders_cancelados)}
-✅ Linhas adicionadas: {adicionados}
-🔀 Linhas ignoradas (já estavam na planilha): {ignorados}
+✅ Carrinhos adicionados: {adicionados}
+🔀 Carrinhos ignorados (já estavam na planilha): {ignorados}
 ❗ Houve erro? {houve_erro}
 """)
