@@ -6,6 +6,8 @@ import json
 import re
 from datetime import datetime, timedelta
 import pytz
+import time
+import traceback
 
 # CONFIGURAÇÕES
 ALIAS = "sportech"
@@ -43,6 +45,7 @@ while True:
         carts_data.extend(data)
         print(f"📄 Página {page} carregada com {len(data)} carrinhos.")
         page += 1
+        time.sleep(1)
     except Exception as e:
         print(f"❌ Erro ao buscar página {page} da Yampi: {e}")
         break
@@ -55,9 +58,9 @@ client = gspread.authorize(credentials)
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
 sheet = spreadsheet.sheet1
 
-# Nomes existentes
+# Dados existentes para deduplicar (por email)
 valores_planilha = sheet.get_all_values()[1:]
-nomes_existentes = {linha[3].strip().lower() for linha in valores_planilha if len(linha) >= 4}
+emails_existentes = {linha[4].strip().lower() for linha in valores_planilha if len(linha) >= 5}
 
 def extrair_telefone(texto):
     matches = re.findall(r'\(?\d{2}\)?\s?\d{4,5}-?\d{4}', texto)
@@ -93,14 +96,13 @@ for cart in carts_data:
                 dt = tz.localize(datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S.%f"))
             except:
                 dt = tz.localize(datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S"))
-
             if inicio_hoje <= dt <= limite_abandono:
                 if any(t.get("status") == "paid" for t in cart.get("transactions", {}).get("data", [])):
                     continue
                 cart["data_atualizacao"] = dt.strftime("%d/%m/%Y %H:%M")
                 carrinhos_filtrados.append(cart)
     except Exception as e:
-        print(f"⚠️ Erro ao processar data: {e}")
+        print(f"⚠️ Erro ao processar data: {traceback.format_exc()}")
 
 # Coletar pedidos cancelados
 orders_cancelados = []
@@ -113,7 +115,6 @@ while True:
         data = response.json().get("data", [])
         if not data:
             break
-
         for order in data:
             updated_at = order.get("updated_at", {}).get("date")
             if updated_at:
@@ -126,6 +127,7 @@ while True:
                     orders_cancelados.append(order)
         print(f"📄 Página {page} de pedidos cancelados carregada.")
         page += 1
+        time.sleep(1)
     except Exception as e:
         print(f"❌ Erro ao buscar pedidos cancelados página {page}: {e}")
         break
@@ -144,13 +146,12 @@ for cart in carrinhos_filtrados:
 
         tracking = cart.get("tracking_data", {})
         customer_name = tracking.get("name", "Desconhecido").strip()
-        nome_normalizado = customer_name.lower()
+        email = tracking.get("email", "Sem email").strip().lower()
 
-        if nome_normalizado in nomes_existentes:
+        if email in emails_existentes:
             ignorados += 1
             continue
 
-        email = tracking.get("email", "Sem email")
         telefone = extrair_telefone(json.dumps(cart))
         items = cart.get("items", {}).get("data", [])
         item = items[0] if items else {}
@@ -178,18 +179,18 @@ for cart in carrinhos_filtrados:
 
     except Exception as e:
         houve_erro_real = True
-        print(f"❌ Erro ao processar carrinho {cart.get('id')}: {e}")
+        print(f"❌ Erro ao processar carrinho {cart.get('id')}: {traceback.format_exc()}")
 
 # Pedidos cancelados
 for order in orders_cancelados:
     try:
         nome = order.get("customer", {}).get("name", "Desconhecido")
-        nome_normalizado = nome.lower()
-        if nome_normalizado in nomes_existentes:
+        email = order.get("customer", {}).get("email", "Sem email").strip().lower()
+
+        if email in emails_existentes:
             ignorados += 1
             continue
 
-        email = order.get("customer", {}).get("email", "Sem email")
         telefone = extrair_telefone(json.dumps(order))
         item = order.get("items", [{}])[0]
         produto = item.get("title", "Sem título")
@@ -205,7 +206,7 @@ for order in orders_cancelados:
 
     except Exception as e:
         houve_erro_real = True
-        print(f"❌ Erro ao processar pedido cancelado {order.get('id')}: {e}")
+        print(f"❌ Erro ao processar pedido cancelado {order.get('id')}: {traceback.format_exc()}")
 
 # Inserir na planilha
 if linhas_para_inserir:
