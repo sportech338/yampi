@@ -17,7 +17,7 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 # Fuso horário
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
-inicio_periodo = agora - timedelta(hours=24)  # Agora vai buscar cancelados das últimas 24h
+inicio_periodo = agora - timedelta(hours=24)  # Busca cancelados das últimas 24h
 
 # API Yampi
 BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/orders"
@@ -136,7 +136,8 @@ for order in orders_cancelados:
         print(f"❌ Erro ao processar pedido {order.get('id', 'sem id')}: {e}")
 
 if linhas_para_inserir:
-    sheet.insert_rows(linhas_para_inserir, row=2)
+    for linha in reversed(linhas_para_inserir):  # mais recentes no topo
+        sheet.insert_row(linha, index=2)
     print(f"✅ {adicionados} pedidos cancelados adicionados.")
 
 # Logs
