@@ -4,6 +4,7 @@ from google.oauth2.service_account import Credentials
 import os
 import json
 import re
+import time
 from datetime import datetime, timedelta
 import pytz
 
@@ -32,6 +33,7 @@ scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis
 credentials = Credentials.from_service_account_info(descoped_credentials, scopes=scope)
 client = gspread.authorize(credentials)
 spreadsheet = client.open_by_key(SPREADSHEET_ID)
+
 try:
     sheet = spreadsheet.worksheet("Pix abandonado")
 except gspread.exceptions.WorksheetNotFound:
@@ -79,6 +81,7 @@ while True:
                     orders_cancelados.append(order)
         print(f"📄 Página {page} carregada com pedidos cancelados.")
         page += 1
+        time.sleep(0.5)  # Evita erro 429
     except Exception as e:
         print(f"❌ Erro ao buscar pedidos página {page}: {e}")
         break
@@ -106,7 +109,8 @@ for order in orders_cancelados:
 
         # Identificar forma de pagamento
         forma_pagamento = "Desconhecido"
-        for transacao in order.get("transactions", {}).get("data", []):
+        transacoes = order.get("transactions", {}).get("data", [])
+        for transacao in transacoes:
             metodo = transacao.get("payment_method")
             if metodo == "pix":
                 forma_pagamento = "Pix"
@@ -129,7 +133,7 @@ for order in orders_cancelados:
 
     except Exception as e:
         houve_erro_real = True
-        print(f"❌ Erro ao processar pedido {order.get('id')}: {e}")
+        print(f"❌ Erro ao processar pedido {order.get('id', 'sem id')}: {e}")
 
 if linhas_para_inserir:
     sheet.insert_rows(linhas_para_inserir, row=2)
