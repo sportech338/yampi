@@ -1,0 +1,30 @@
+name: Rodar pedidos cancelados diariamente
+
+on:
+  schedule:
+    - cron: '0 12 * * *' # Executa todo dia às 9h da manhã (horário de Brasília)
+  workflow_dispatch: # permite rodar manualmente também
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repositório
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependências
+        run: |
+          pip install -r requirements.txt
+
+      - name: Rodar script
+        env:
+          YAMPI_API_TOKEN: ${{ secrets.YAMPI_API_TOKEN }}
+          YAMPI_SECRET_KEY: ${{ secrets.YAMPI_SECRET_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        run: |
+          python seu_arquivo.py
