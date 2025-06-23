@@ -26,4 +26,5 @@ jobs:
           YAMPI_API_TOKEN: ${{ secrets.YAMPI_API_TOKEN }}
           YAMPI_SECRET_KEY: ${{ secrets.YAMPI_SECRET_KEY }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-        run: python sync_cancelados.py
+        run: python cancelados.py
+
