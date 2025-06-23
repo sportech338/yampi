@@ -17,9 +17,9 @@ SPREADSHEET_ID = '1OBKs2RpmRNqHDn6xE3uMOU-bwwnO_JY1ZhqctZGpA3E'
 # Fuso horário
 tz = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(tz)
-inicio_hoje = tz.localize(datetime.combine(agora.date(), datetime.min.time()))
+inicio_periodo = agora - timedelta(hours=24)  # Agora vai buscar cancelados das últimas 24h
 
-# API Yampi - pedidos cancelados
+# API Yampi
 BASE_URL = f"https://api.dooki.com.br/v2/{ALIAS}/orders"
 headers = {
     "User-token": TOKEN,
@@ -39,7 +39,7 @@ try:
 except gspread.exceptions.WorksheetNotFound:
     sheet = spreadsheet.add_worksheet(title="Pix abandonado", rows="1000", cols="20")
 
-# Emails existentes (coluna E = índice 4)
+# Emails existentes
 valores_planilha = sheet.get_all_values()[1:]
 emails_existentes = {linha[4].strip().lower() for linha in valores_planilha if len(linha) >= 5}
 
@@ -58,7 +58,7 @@ def extrair_telefone(texto):
             return numero_formatado
     return ""
 
-# Paginação
+# Buscar pedidos cancelados
 orders_cancelados = []
 page = 1
 while True:
@@ -76,15 +76,17 @@ while True:
                     dt = tz.localize(datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S.%f"))
                 except:
                     dt = tz.localize(datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S"))
-                if inicio_hoje <= dt <= agora:
+                if inicio_periodo <= dt <= agora:
                     order["data_cancelamento"] = dt.strftime("%d/%m/%Y %H:%M")
                     orders_cancelados.append(order)
         print(f"📄 Página {page} carregada com pedidos cancelados.")
         page += 1
-        time.sleep(0.5)  # Evita erro 429
+        time.sleep(0.5)
     except Exception as e:
         print(f"❌ Erro ao buscar pedidos página {page}: {e}")
         break
+
+print(f"📦 Total bruto de cancelados: {len(orders_cancelados)}")
 
 # Inserção
 linhas_para_inserir = []
@@ -97,7 +99,7 @@ for order in orders_cancelados:
         nome = order.get("customer", {}).get("name", "Desconhecido").strip()
         email = order.get("customer", {}).get("email", "Sem email").strip().lower()
 
-        if email in emails_existentes:
+        if email and email in emails_existentes:
             ignorados += 1
             continue
 
@@ -107,10 +109,8 @@ for order in orders_cancelados:
         qtd = item.get("quantity", 1)
         total = order.get("total", 0)
 
-        # Identificar forma de pagamento
         forma_pagamento = "Desconhecido"
-        transacoes = order.get("transactions", {}).get("data", [])
-        for transacao in transacoes:
+        for transacao in order.get("transactions", {}).get("data", []):
             metodo = transacao.get("payment_method")
             if metodo == "pix":
                 forma_pagamento = "Pix"
